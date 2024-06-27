@@ -1,0 +1,29 @@
+{
+  "dataset": {
+    "path": "/Users/echo/Downloads/df_germany.csv",
+    "brand": "absolut",
+    "dependent_variable": "volume_so_off",
+    "independent_variables_X": ["relative_gap_to_90th_price_off_off", "off_trade_visibility_off", "digital_off", "digital_social_media_off","out_of_home_off",
+    "television_off", "brand_experience_off"],
+    "independent_variables_Z": ["distribution_off_off", "discount_price_comp_to_pr_off_off"]
+
+  },
+  "inferenceMethod": "torch_autograd",
+  "modelTraining": {
+    "epoch": 50,
+    "learningRate": 0.001,
+    "originalG":0.7,
+    "theta0": 0,
+    "nSplits": 5,
+    "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl"
+  },
+  "inferenceParams":{
+    "mcmc":{
+      "nwalkers": 32,
+      "num_samples": 200,
+      "burn_in_steps": 100,
+      "num_steps_between_samples": 15
+    }
+
+  }
+}
