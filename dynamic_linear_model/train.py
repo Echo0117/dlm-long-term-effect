@@ -76,58 +76,29 @@ class Trainer:
         print(f"Test accuracy: {test_mse}")
 
         return params
-
-    def train_cross_validation(self):
+    
+    def train_for_simulation(self):
         """
-        Train the model using cross-validation and evaluate on the test set.
+        Train the model for multiple iterations and record statistics of parameters.
         """
-        initial_params = self._initialize_parameters()
+        params_list = []
+        losses = []
 
-        # kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=42)
-        # val_losses = []
-        # val_mse_list = []
+        for _ in range(10):
+            initial_params = self._initialize_parameters()
 
-        # train_losses = []
-        # train_mse_list = []
-
-        # for train_index, val_index in kf.split(self.X_train):
-        #     X_train_cv, X_val_cv = self.X_train[train_index], self.X_train[val_index]
-        #     Z_train_cv, Z_val_cv = self.Z_train[train_index], self.Z_train[val_index]
-        #     Y_train_cv, Y_val_cv = self.Y_train[train_index], self.Y_train[val_index]
-
-        #     if config['inferenceMethod'] == "torch_autograd":
-        #         params = self._optimize(Y_train_cv, X_train_cv, Z_train_cv, initial_params)
-        #     elif config['inferenceMethod'] == "pertub_gradient_descent":
-        #         params = GradientDescentPerturbation().optimize(Y_train_cv, X_train_cv, Z_train_cv, initial_params)
-
-        #     train_loss, train_mse = self._evaluate(params, X_train_cv, Z_train_cv, Y_train_cv)
-        #     val_loss, val_mse = self._evaluate(params, X_val_cv, Z_val_cv, Y_val_cv)
+            if config['inferenceMethod'] == "torch_autograd":
+                params = self._optimize(self.Y_train, self.X_train, self.Z_train, initial_params)
             
-        #     train_losses.append(train_loss)
-        #     train_mse_list.append(train_mse)
-        #     val_losses.append(val_loss)
-        #     val_mse_list.append(val_mse)
+            elif config['inferenceMethod'] == "pertub_gradient_descent":
+                params = GradientDescentPerturbation().optimize(self.Y_train, self.X_train, self.Z_train, initial_params)
 
-        # avg_val_loss = np.mean(val_losses)
-        # avg_val_mse = np.mean(val_mse_list)
-        # print(f"Average validation loss from cross-validation: {avg_val_loss}")
-        # print(f"Average validation accuracy from cross-validation: {avg_val_mse}")
+            test_loss, test_mse = self._evaluate(params, self.X_test, self.Z_test, self.Y_test)
+            params_list.append(params)
+            losses.append(test_loss)
 
-        # Train on full training data
-        if config['inferenceMethod'] == "torch_autograd":
-            params = self._optimize(self.Y_train, self.X_train, self.Z_train, initial_params)
-        elif config['inferenceMethod'] == "pertub_gradient_descent":
-            params = GradientDescentPerturbation().optimize(self.Y_train, self.X_train, self.Z_train, initial_params)
-
-        self.save_model(params)
-        utils.log_parameters_results(params=params)
-
-        # Evaluate on test set
-        test_loss, test_mse = self._evaluate(params, self.X_test, self.Z_test, self.Y_test)
-        print(f"Test loss: {test_loss}")
-        print(f"Test accuracy: {test_mse}")
-
-        return params
+        # Calculate statistics
+        self._calculate_statistics(params_list, losses)
     
     def _optimize(self, Y_t, X_t, Z_t, params):
         """
@@ -295,3 +266,56 @@ class Trainer:
         plt.legend()
 
         plt.tight_layout()
+
+    def _calculate_statistics(self, params_list, losses):
+        """
+        Calculate and print the statistics of the parameters from multiple runs.
+        """
+        Gs, etas, zetas = [], [], []
+
+        for params in params_list:
+            if config['inferenceMethod'] == 'torch_autograd':
+                G = params[0].detach().numpy()
+                eta = params[1].detach().numpy()
+                zeta = params[2].detach().numpy()
+            elif config['inferenceMethod'] == 'pertub_gradient_descent':
+                G, *coeffs = params
+                eta = np.array(coeffs[:self.X_t.shape[1]])
+                zeta = np.array(coeffs[self.X_t.shape[1]:])
+            
+            Gs.append(G)
+            etas.append(eta)
+            zetas.append(zeta)
+
+        # Calculate statistics
+        Gs = np.array(Gs)
+        etas = np.array(etas)
+        zetas = np.array(zetas)
+
+        G_stats = {
+            'initial': Gs[0],
+            'mean': np.mean(Gs),
+            'std': np.std(Gs),
+            'median': np.median(Gs),
+            'max': np.max(Gs)
+        }
+
+        eta_stats = {
+            'initial': etas[0],
+            'mean': np.mean(etas, axis=0),
+            'std': np.std(etas, axis=0),
+            'median': np.median(etas, axis=0),
+            'max': np.max(etas, axis=0)
+        }
+
+        zeta_stats = {
+            'initial': zetas[0],
+            'mean': np.mean(zetas, axis=0),
+            'std': np.std(zetas, axis=0),
+            'median': np.median(zetas, axis=0),
+            'max': np.max(zetas, axis=0)
+        }
+
+        print("G statistics:", G_stats)
+        print("Eta statistics:", eta_stats)
+        print("Zeta statistics:", zeta_stats)

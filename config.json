@@ -10,12 +10,16 @@
   },
   "inferenceMethod": "torch_autograd",
   "modelTraining": {
-    "epoch": 50,
+    "epoch": 200,
     "learningRate": 0.001,
     "originalG":0.7,
     "theta0": 0,
     "nSplits": 5,
     "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl"
+  },
+  "simulationRecovery":{
+    "iteration": 2,
+    "paramsSavedPath": "simulated_parameters_1.csv"
   },
   "inferenceParams":{
     "mcmc":{

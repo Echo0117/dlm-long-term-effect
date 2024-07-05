@@ -8,10 +8,10 @@ def convert_normalized_data(scaler, data):
     convert_data = scaler.inverse_transform(data.reshape(-1, 1)).flatten()
     return convert_data
 
-def plot(actual, predicted, label1, label2, title):
+def plot(data_1, data_2, label1, label2, title):
     plt.figure(figsize=(10, 5))
-    plt.plot(actual, label=label1)
-    plt.plot(predicted, label=label2, linestyle='--')
+    plt.plot(data_1, 'b-', label=label1)
+    plt.plot(data_2, 'r--', label=label2)
     plt.legend()
     plt.xlabel('Time')
     plt.ylabel('Volume Sold')
@@ -97,6 +97,12 @@ def negative_log_likelihood(params, Y_t, X_t, Z_t):
 
             predicted_Y_t = theta_t[t] + torch.dot(X_t[t], eta) + torch.dot(Z_t[t], zeta / 2)
             neg_log_likelihood += 0.5 * ((Y_t[t] - predicted_Y_t)**2)
+
+            # Add checks for numerical stability
+            if torch.isnan(predicted_Y_t) or torch.isinf(predicted_Y_t):
+                logging.warn(f"Numerical instability at step {t}. Predicted Y_t: {predicted_Y_t.item()}")
+                break
+
     return neg_log_likelihood
 
 def log_parameters_results(simulated_G=None, simulated_eta=None, simulated_zeta=None, params=None):
