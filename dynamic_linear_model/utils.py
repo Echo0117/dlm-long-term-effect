@@ -16,7 +16,20 @@ def plot(data_1, data_2, label1, label2, title):
     plt.xlabel('Time')
     plt.ylabel('Volume Sold')
     plt.title(title)
-
+    
+    # Prepare the specific configuration text
+    config_text = f"inferenceMethod: {config['inferenceMethod']}\n"
+    if config["inferenceMethod"] == "mcmc":
+        mcmc_params = config["inferenceParams"]["mcmc"]
+        config_text += "inferenceParams:\n"
+        for key, value in mcmc_params.items():
+            config_text += f"  {key}: {value}\n"
+    
+    learning_rate = config["modelTraining"]["learningRate"]
+    config_text += f"learningRate: {learning_rate}\n"
+    
+    # Add the configuration text to the plot
+    plt.gcf().text(0.15, 0.85, config_text, fontsize=8, va='top', wrap=True)
 
 def training_plot_metrics(train_losses, val_losses, test_loss, train_mse_list, val_mse_list, test_mse):
     """
@@ -56,6 +69,9 @@ def training_plot_metrics(train_losses, val_losses, test_loss, train_mse_list, v
 
     plt.tight_layout()
 
+def sigmoid(x):  
+    return np.exp(-np.logaddexp(0, -x))
+
 def negative_log_likelihood(params, Y_t, X_t, Z_t):
     """
     Calculate the negative log likelihood for the given parameters and data.
@@ -69,11 +85,13 @@ def negative_log_likelihood(params, Y_t, X_t, Z_t):
     Returns:
     float: Negative log likelihood value.
     """
-
     T = len(Y_t)
 
-    if config['inferenceMethod'] == "pertub_gradient_descent":
+    if config['inferenceMethod'] == "pertub_gradient_descent" or config['inferenceMethod'] == "mcmc":
         G, *coeffs = params
+        if config["modelTraining"]["addSigmoid"]:
+            G = sigmoid(G)
+
         eta = np.array(coeffs[:X_t.shape[1]])
         zeta = np.array(coeffs[X_t.shape[1]:])
         theta_t = np.zeros(T)
@@ -84,10 +102,13 @@ def negative_log_likelihood(params, Y_t, X_t, Z_t):
                 theta_t[t] = G * theta_t[t-1] + np.dot(Z_t[t-1], zeta / 2)
             
             predicted_Y_t = theta_t[t] + np.dot(X_t[t], eta) + np.dot(Z_t[t], zeta / 2)
-            neg_log_likelihood += 0.5 * ((Y_t[t] - predicted_Y_t)**2)
+            neg_log_likelihood -= 0.5 * ((Y_t[t] - predicted_Y_t)**2)
     
     elif config['inferenceMethod'] == "torch_autograd":
         G, eta, zeta = params
+        if config["modelTraining"]["addSigmoid"]:
+            G = torch.sigmoid(G)
+
         theta_t = torch.zeros(T, dtype=torch.float32)
         neg_log_likelihood = torch.tensor(0.0, dtype=torch.float32)
 
@@ -102,7 +123,6 @@ def negative_log_likelihood(params, Y_t, X_t, Z_t):
             if torch.isnan(predicted_Y_t) or torch.isinf(predicted_Y_t):
                 logging.warn(f"Numerical instability at step {t}. Predicted Y_t: {predicted_Y_t.item()}")
                 break
-
     return neg_log_likelihood
 
 def log_parameters_results(simulated_G=None, simulated_eta=None, simulated_zeta=None, params=None):

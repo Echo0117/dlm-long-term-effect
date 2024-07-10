@@ -77,3 +77,13 @@ if __name__ == "__main__":
     # quantify the long term effect of the marketing campaign on sales
     # param recovery
  
+
+
+ # lr e-4
+ # g: sigmoid
+ # when g=0.1 or g=0.9, (simulation part) when does the problem occur, g is big or small
+ # how gradient steps effect the g, plot how g changes
+ # mcmc (if above didn't work, try mcmc)
+
+# check if monthly meeting is necessary
+# create notion phd journal

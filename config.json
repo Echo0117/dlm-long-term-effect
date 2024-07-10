@@ -8,25 +8,27 @@
     "independent_variables_Z": ["distribution_off_off", "discount_price_comp_to_pr_off_off"]
 
   },
-  "inferenceMethod": "torch_autograd",
+  "inferenceMethod": "mcmc", 
   "modelTraining": {
-    "epoch": 200,
+    "epoch": 100,
     "learningRate": 0.001,
     "originalG":0.7,
     "theta0": 0,
     "nSplits": 5,
+    "addSigmoid": false,
     "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl"
   },
   "simulationRecovery":{
-    "iteration": 2,
+    "independentRun": 5,
     "paramsSavedPath": "simulated_parameters_1.csv"
   },
   "inferenceParams":{
     "mcmc":{
-      "nwalkers": 32,
-      "num_samples": 200,
-      "burn_in_steps": 100,
-      "num_steps_between_samples": 15
+      "nWalkers": 32,
+      "numSamples": 2000,
+      "burnInSteps": 200,
+      "numStepsBetweenSamples": 50,
+      "perturbationNoise": 0.0001
     }
 
   }

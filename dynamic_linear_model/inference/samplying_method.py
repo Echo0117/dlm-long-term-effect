@@ -1,6 +1,10 @@
 import numpy as np
 import emcee
 import matplotlib.pyplot as plt
+from multiprocessing import Pool, cpu_count, freeze_support
+from config import config
+import torch
+from ..utils import negative_log_likelihood
 
 class SamplingMethod:
     def __init__(self) -> None:
@@ -10,30 +14,25 @@ class SamplingMethod:
         pass
 
 class MCMCSamplingMethod(SamplingMethod):
-    def __init__(self, model, num_samples, burn_in_steps, num_steps_between_samples, nwalkers, ndim, log_prob_fn, args):
+    def __init__(self):
         """
         Initialize the MCMCSamplingMethod class.
 
         Parameters:
-        model (object): The model used for state transitions.
         num_samples (int): Number of samples to generate.
         burn_in_steps (int): Number of burn-in steps.
         num_steps_between_samples (int): Number of steps between each sample.
         nwalkers (int): Number of walkers in the MCMC ensemble.
         ndim (int): Number of dimensions in the parameter space.
-        log_prob_fn (function): Log probability function for the MCMC sampler.
-        args (tuple): Additional arguments for the log probability function.
+        perturbation_noise (float): perturbation noise.
         """
-        self.model = model
-        self.num_samples = num_samples
-        self.burn_in_steps = burn_in_steps
-        self.num_steps_between_samples = num_steps_between_samples
-        self.nwalkers = nwalkers
-        self.ndim = ndim
-        self.log_prob_fn = log_prob_fn
-        self.args = args
+        self.num_samples = config["inferenceParams"]["mcmc"]["numSamples"]
+        self.burn_in_steps = config["inferenceParams"]["mcmc"]["burnInSteps"]
+        self.num_steps_between_samples = config["inferenceParams"]["mcmc"]["numStepsBetweenSamples"]
+        self.nwalkers = config["inferenceParams"]["mcmc"]["nWalkers"]
+        self.perturbation_noise = config["inferenceParams"]["mcmc"]["perturbationNoise"]
 
-    def sample(self, initial_state):
+    def sample(self, initial_state, Y_t, X_t, Z_t):
         """
         Generate samples using the MCMC method.
 
@@ -43,81 +42,77 @@ class MCMCSamplingMethod(SamplingMethod):
         Returns:
         np.ndarray: Generated samples.
         """
-        # Set up the MCMC sampler
-        sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, self.log_prob_fn, args=self.args)
-
         # Initial positions of the walkers
-        pos = initial_state + 1e-4 * np.random.randn(self.nwalkers, self.ndim)
+        ndim = len(initial_state)
+        pos = initial_state + self.perturbation_noise * np.random.randn(self.nwalkers, ndim)
+        
+        with Pool(processes=cpu_count()) as pool:
+            # Set up the MCMC sampler
+            sampler = emcee.EnsembleSampler(self.nwalkers, ndim, negative_log_likelihood, args=(Y_t, X_t, Z_t), pool=pool)
 
-        # Run the MCMC sampler
-        sampler.run_mcmc(pos, self.num_samples, progress=True)
+            # Run the MCMC sampler
+            sampler.run_mcmc(pos, self.num_samples, progress=True)
 
         # Get the samples
         samples = sampler.get_chain(discard=self.burn_in_steps, thin=self.num_steps_between_samples, flat=True)
         return samples
 
     def plot_traces(self, sampler):
-        """
-        Plot the traces of the MCMC samples.
+        # """
+        # Plot the traces of the MCMC samples.
 
-        Parameters:
-        sampler (emcee.EnsembleSampler): The MCMC sampler object.
-        """
-        fig, axes = plt.subplots(self.ndim, figsize=(10, 7), sharex=True)
-        for i in range(self.ndim):
-            ax = axes[i]
-            ax.plot(sampler.get_chain()[:, :, i], "k", alpha=0.3)
-            ax.set_xlim(0, len(sampler.get_chain()))
-            ax.set_ylabel(f"Parameter {i}")
-        axes[-1].set_xlabel("Step number")
-        plt.show()
+        # Parameters:
+        # sampler (emcee.EnsembleSampler): The MCMC sampler object.
+        # """
+        # fig, axes = plt.subplots(ndim, figsize=(10, 7), sharex=True)
+        # for i in range(ndim):
+        #     ax = axes[i]
+        #     ax.plot(sampler.get_chain()[:, :, i], "k", alpha=0.3)
+        #     ax.set_xlim(0, len(sampler.get_chain()))
+        #     ax.set_ylabel(f"Parameter {i}")
+        # axes[-1].set_xlabel("Step number")
+        # plt.show()
+        pass
 
-    def extract_parameters(self, samples):
+    def extract_parameters(self, initial_state, Y_t, X_t, Z_t):
         """
         Extract mean parameter estimates from the samples.
 
         Parameters:
-        samples (np.ndarray): The generated samples.
 
         Returns:
-        tuple: Extracted parameters (G, sigma_v, sigma_w, eta, zeta).
+        tuple: Extracted parameters (G, eta, zeta).
         """
+        samples = self.sample(initial_state, Y_t, X_t, Z_t)
         mean_params = np.mean(samples, axis=0)
-        G, log_sigma_v, log_sigma_w, *coeffs = mean_params
-        sigma_v = np.exp(log_sigma_v)
-        sigma_w = np.exp(log_sigma_w)
-        eta = np.array(coeffs[:self.model.X_t.shape[1]])
-        zeta = np.array(coeffs[self.model.X_t.shape[1]:])
-        return G, sigma_v, sigma_w, eta, zeta
-    
-    def log_probability(theta, Y_t, X_t, Z_t):
-        G, log_sigma_v, log_sigma_w, *coeffs = theta
-        sigma_v = np.exp(log_sigma_v)
-        sigma_w = np.exp(log_sigma_w)
+
+        print("mean_params", mean_params)
+        G, *coeffs = mean_params
         eta = np.array(coeffs[:X_t.shape[1]])
         zeta = np.array(coeffs[X_t.shape[1]:])
-        
-        if sigma_v <= 0 or sigma_w <= 0:
-            return -np.inf
-        
-        T = len(Y_t)
+        # Convert each element to torch tensor individually
+        G_tensor = torch.tensor([G], requires_grad=False)
+        eta_tensor = torch.tensor(eta, requires_grad=False)
+        zeta_tensor = torch.tensor(zeta, requires_grad=False)
 
-        # Initial state
+        # Return them as a list of tensors or concatenate them as needed
+        return [G_tensor, eta_tensor, zeta_tensor]
+    
+
+    # Define the log probability function
+    def log_probability(self, params, Y_t, X_t, Z_t):
+        G, *coeffs = params
+        eta = np.array(coeffs[:X_t.shape[1]])
+        zeta = np.array(coeffs[X_t.shape[1]:])
+
+        T = len(Y_t)
         theta_t = np.zeros(T)
-        
-        # Log-likelihood
         log_prob = 0
 
-        # Iterate through each time step
         for t in range(T):
             if t > 0:
-                # State transition equation
-                theta_t[t] = G * theta_t[t-1] + np.dot(Z_t[t-1], zeta/2)
-            
-            # Observation equation
-            predicted_Y_t = theta_t[t] + np.dot(X_t[t], eta) + np.dot(Z_t[t], zeta/2) 
-            
-            # Log-likelihood contribution
-            log_prob += -0.5 * np.log(2 * np.pi * sigma_v**2) - 0.5 * ((Y_t[t] - predicted_Y_t)**2 / sigma_v**2)
+                theta_t[t] = G * theta_t[t-1] + np.dot(Z_t[t-1], zeta / 2)
+            predicted_Y_t = theta_t[t] + np.dot(X_t[t], eta) + np.dot(Z_t[t], zeta / 2)
+            log_prob -= 0.5 * ((Y_t[t] - predicted_Y_t)**2)
         
         return log_prob
