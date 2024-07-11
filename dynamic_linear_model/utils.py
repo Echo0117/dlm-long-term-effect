@@ -8,28 +8,35 @@ def convert_normalized_data(scaler, data):
     convert_data = scaler.inverse_transform(data.reshape(-1, 1)).flatten()
     return convert_data
 
-def plot(data_1, data_2, label1, label2, title):
-    plt.figure(figsize=(10, 5))
-    plt.plot(data_1, 'b-', label=label1)
-    plt.plot(data_2, 'r--', label=label2)
-    plt.legend()
-    plt.xlabel('Time')
-    plt.ylabel('Volume Sold')
-    plt.title(title)
+def plot(data_1, data_2, label1, label2, title, ax):
+    # plt.figure(figsize=(10, 5))
+    ax.plot(data_1, 'b-', label=label1)
+    ax.plot(data_2, 'r--', label=label2)
+    ax.legend()
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Volume Sold')
+    
     
     # Prepare the specific configuration text
+    original_g = config["modelTraining"]["originalG"]
     config_text = f"inferenceMethod: {config['inferenceMethod']}\n"
     if config["inferenceMethod"] == "mcmc":
         mcmc_params = config["inferenceParams"]["mcmc"]
-        config_text += "inferenceParams:\n"
+        config_text += "inferenceParams: "
         for key, value in mcmc_params.items():
             config_text += f"  {key}: {value}\n"
+    if config["inferenceMethod"] == "torch_autograd":
+        learning_rate = config["modelTraining"]["learningRate"]
+        config_text += f"learningRate: {learning_rate} "
+        
+    config_text += f"originalG: {original_g}"
     
-    learning_rate = config["modelTraining"]["learningRate"]
-    config_text += f"learningRate: {learning_rate}\n"
-    
-    # Add the configuration text to the plot
-    plt.gcf().text(0.15, 0.85, config_text, fontsize=8, va='top', wrap=True)
+   # Add the configuration text to the plot
+    #plt.gcf().text(0.15, 0.85, config_text, fontsize=8, va='top', wrap=True)
+    # fig = ax.get_figure()
+    # fig.text(0.15, 0.85, config_text, fontsize=8, va='top', wrap=True)
+    ax.set_title(title)
+    ax.text(0.15, 0.5, config_text, fontsize=7, va='top', wrap=True)
 
 def training_plot_metrics(train_losses, val_losses, test_loss, train_mse_list, val_mse_list, test_mse):
     """

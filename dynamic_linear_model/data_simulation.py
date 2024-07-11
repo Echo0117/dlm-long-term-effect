@@ -1,4 +1,5 @@
 import logging
+import os
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
@@ -73,7 +74,7 @@ class SimulationRecovery():
     #     self._plot_params(params_list)
     #     return Y_predicted_list
 
-    def recovery_for_simulation(self):
+    def recovery_for_simulation(self, ax):
         """
         Train the model for multiple iterations and record statistics of parameters.
         """
@@ -99,7 +100,8 @@ class SimulationRecovery():
 
         # Calculate statistics
         self._calculate_statistics(params_list)
-        self._plot_params(params_list)
+        print("self._calculate_statistics(params_list)")
+        self._plot_params(params_list, ax)
         return Y_predicted_list
     
     def _optimize(self, Y_t, X_t, Z_t, params):
@@ -166,6 +168,8 @@ class SimulationRecovery():
             initial_params = [initial_G] + list(initial_eta) + list(initial_zeta)
         elif config['inferenceMethod'] == 'mcmc':
             initial_params = np.append(np.append(np.array([initial_G]), initial_eta), initial_zeta)
+        else:
+            raise ValueError("Invalid inference method specified in the config.")
         return initial_params
 
     def save_model(self, params):
@@ -272,14 +276,14 @@ class SimulationRecovery():
         plt.legend()
         plt.tight_layout()
 
-    def _plot_params(self, params_list):
+    def _plot_params(self, params_list, ax):
         """
         Plot the G, eta, and zeta values for each run.
         """
         # num_runs = len(params_list)
         num_epochs = len(params_list)
 
-        plt.figure(figsize=(14, 6))
+        # plt.figure(figsize=(14, 6))
         Gs, etas, zetas = [], [], []
         for i, params in enumerate(params_list):
             Gs.append(params[0].detach().numpy())
@@ -287,23 +291,23 @@ class SimulationRecovery():
             zetas.append(params[2].detach().numpy())
             
         # Plot G values
-        plt.plot(range(num_epochs), Gs, label=f'G')
+        ax.plot(range(num_epochs), Gs, label=f'G')
         etas = np.array(etas).T 
         zetas = np.array(zetas).T 
         # Plot eta values
         for j in range(etas.shape[0])[:2]:
-            plt.plot(range(num_epochs), etas[j], label=f'eta {j+1}')
+            ax.plot(range(num_epochs), etas[j], label=f'eta {j+1}')
         
         # Plot zeta values
         for k in range(zetas.shape[0])[:2]:
             print("zetas[k]", zetas[k])
-            plt.plot(range(num_epochs), zetas[k], label=f'zeta {k+1}')
+            ax.plot(range(num_epochs), zetas[k], label=f'zeta {k+1}')
 
-        plt.title(f'Parameters during Recovery lr: {str(config["modelTraining"]["learningRate"])}, inference: {config["inferenceMethod"]}')
-        plt.xlabel('Epoch')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.tight_layout()
+        ax.set_title(f'Parameters during Recovery lr: {str(config["modelTraining"]["learningRate"])}, inference: {config["inferenceMethod"]}')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Value')
+        ax.legend()
+        # ax.tight_layout()
 
     def _calculate_statistics(self, params_list):
         """
@@ -368,13 +372,93 @@ class SimulationRecovery():
         columns = ["Param"] + [f"iteration {i+1}" for i in range(len(params_list))] + ["Mean", "Std", "Median", "Max"]
         df = pd.DataFrame(rows, columns=columns)
 
-        df_simulated = pd.read_csv(config["simulationRecovery"]["paramsSavedPath"])
-        df["Simulated"] = df_simulated["Simulated"]
+        # Define the file path from the configuration
+        file_path = config["simulationRecovery"]["paramsSavedPath"]
+        file_simulated_path = config["simulationRecovery"]["simulatedParamSavedPath"]
+
+        df_existing = pd.read_csv(file_path) if os.path.exists(file_path) else pd.DataFrame()
+        df_simulated_existing = pd.read_csv(file_simulated_path) if os.path.exists(file_simulated_path) else pd.DataFrame()
+              
+        df["Simulated"] = df_simulated_existing["Simulated"][:len(rows)]
+        new_df = pd.concat([df, df_existing], axis=0)
+        empty_row = pd.DataFrame([[None] * len(new_df.columns)], columns=new_df.columns)
+        new_df = pd.concat([new_df, empty_row], ignore_index=True)
     
         # Save to CSV
-        df.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
+        new_df.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
 
         print("Simulation results saved to simulation_results.csv")
+
+    # def _calculate_statistics(self, params_list):
+    #     """
+    #     Calculate and print the statistics of the parameters from multiple runs.
+    #     """
+    #     Gs, etas, zetas = [], [], []
+
+    #     for params in params_list:
+    #         if config['inferenceMethod'] == 'torch_autograd' or config['inferenceMethod'] == 'mcmc':
+    #             G = params[0].detach().numpy()
+    #             eta = params[1].detach().numpy()
+    #             zeta = params[2].detach().numpy()
+    #         elif config['inferenceMethod'] == 'pertub_gradient_descent':
+    #             G, *coeffs = params
+    #             eta = np.array(coeffs[:self.X_t.shape[1]])
+    #             zeta = np.array(coeffs[self.X_t.shape[1]:])
+            
+    #         Gs.append(G)
+    #         etas.append(eta)
+    #         zetas.append(zeta)
+
+    #     # Calculate statistics
+    #     Gs = np.array(Gs)
+    #     etas = np.array(etas)
+    #     zetas = np.array(zetas)
+
+    #     G_stats = {
+    #         'mean': np.mean(Gs),
+    #         'std': np.std(Gs),
+    #         'median': np.median(Gs),
+    #         'max': np.max(Gs)
+    #     }
+
+    #     eta_stats = {
+    #         'mean': np.mean(etas, axis=0),
+    #         'std': np.std(etas, axis=0),
+    #         'median': np.median(etas, axis=0),
+    #         'max': np.max(etas, axis=0)
+    #     }
+
+    #     zeta_stats = {
+    #         'mean': np.mean(zetas, axis=0),
+    #         'std': np.std(zetas, axis=0),
+    #         'median': np.median(zetas, axis=0),
+    #         'max': np.max(zetas, axis=0)
+    #     }
+
+    #     print("G statistics:", G_stats)
+    #     print("Eta statistics:", eta_stats)
+    #     print("Zeta statistics:", zeta_stats)
+
+
+    #     # Combine all statistics and iteration results into a single DataFrame
+    #     rows = [["G", *Gs.tolist(), G_stats['mean'], G_stats['std'], G_stats['median'], G_stats['max']]]
+
+    #     for i in range(len(eta_stats['mean'])):
+    #         rows.append([f"η{i+1}", *etas[:, i].tolist(), eta_stats['mean'][i], eta_stats['std'][i], eta_stats['median'][i], eta_stats['max'][i]])
+
+    #     for i in range(len(zeta_stats['mean'])):
+    #         rows.append([f"ζ{i+1}", *zetas[:, i].tolist(), zeta_stats['mean'][i], zeta_stats['std'][i], zeta_stats['median'][i], zeta_stats['max'][i]])
+
+    #     columns = ["Param"] + [f"iteration {i+1}" for i in range(len(params_list))] + ["Mean", "Std", "Median", "Max"]
+    #     df = pd.DataFrame(rows, columns=columns)
+
+    #     df_simulated = pd.read_csv(config["simulationRecovery"]["paramsSavedPath"])
+    #     df["Simulated"] = df_simulated["Simulated"]
+    
+    #     # Save to CSV
+    #     df.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
+
+    #     print("Simulation results saved to simulation_results.csv")
 
 
 class DataSimulation:
@@ -409,9 +493,21 @@ class DataSimulation:
         print("self.eta", self.eta)
         print("self.zeta", self.zeta)
 
+    # def save_simulated_parameters(self):
+    #     """
+    #     Save the simulated parameters to a CSV file.
+    #     """
+    #     simulated_params = {
+    #         "Param": ["G"] + [f"η{i+1}" for i in range(len(self.eta))] + [f"ζ{i+1}" for i in range(len(self.zeta))],
+    #         "Simulated": [self.G] + list(self.eta) + list(self.zeta)
+    #     }
+    #     df_simulated = pd.DataFrame(simulated_params)
+    #     print("df_simulated: ", df_simulated)
+    #     df_simulated.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
+
     def save_simulated_parameters(self):
         """
-        Save the simulated parameters to a CSV file.
+        Save the simulated parameters to a CSV file by adding new rows above the original file.
         """
         simulated_params = {
             "Param": ["G"] + [f"η{i+1}" for i in range(len(self.eta))] + [f"ζ{i+1}" for i in range(len(self.zeta))],
@@ -419,7 +515,19 @@ class DataSimulation:
         }
         df_simulated = pd.DataFrame(simulated_params)
         print("df_simulated: ", df_simulated)
-        df_simulated.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
+        
+        file_path = config["simulationRecovery"]["simulatedParamSavedPath"]
+        
+        if os.path.exists(file_path):
+            existing_df = pd.read_csv(file_path)
+            print("existing_df: ", existing_df)
+            combined_df = pd.concat([df_simulated, existing_df], ignore_index=True)
+        else:
+            combined_df = df_simulated
+
+        print("combined_df: ", combined_df)
+        
+        combined_df.to_csv(file_path, index=False)
 
     def generate_theta(self) -> np.ndarray:
         """
