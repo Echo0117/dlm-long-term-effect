@@ -2,6 +2,7 @@ import os
 import pickle
 import numpy as np
 
+
 class DynamicLinearModel:
     def __init__(self, model_path=None):
         """
@@ -27,16 +28,16 @@ class DynamicLinearModel:
         Parameters:
         model_path (str): Path to the saved model parameters.
         """
-        with open(model_path, 'rb') as file:
+        with open(model_path, "rb") as file:
             model_data = pickle.load(file)
-            self.G = model_data['G']
-            self.eta = model_data['eta']
-            self.zeta = model_data['zeta']
+            self.G = model_data["G"]
+            self.eta = model_data["eta"]
+            self.zeta = model_data["zeta"]
 
     def dlm_model(self, X_t, Z_t):
         """
         Apply the Dynamic Linear Model (DLM) to predict values.
-        
+
         Parameters:
         X_t (np.ndarray): Independent variables matrix X.
         Z_t (np.ndarray): Independent variables matrix Z.
@@ -51,14 +52,15 @@ class DynamicLinearModel:
         T = len(X_t)
         theta_t = np.zeros(T)
         predicted_Y = np.zeros(T)
-        
+
         for t in range(T):
             if t > 0:
                 # State transition equation
-                theta_t[t] = self.G * theta_t[t-1] + np.dot(Z_t[t-1], self.zeta / 2)
-            
-            # Observation equation
-            predicted_Y[t] = theta_t[t] + np.dot(X_t[t], self.eta) + np.dot(Z_t[t], self.zeta / 2)
-        
-        return predicted_Y
+                theta_t[t] = self.G * theta_t[t - 1] + np.dot(Z_t[t - 1], self.zeta / 2)
 
+            # Observation equation
+            predicted_Y[t] = (
+                theta_t[t] + np.dot(X_t[t], self.eta) + np.dot(Z_t[t], self.zeta / 2)
+            )
+
+        return predicted_Y

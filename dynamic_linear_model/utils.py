@@ -12,31 +12,26 @@ def plot(data_1, data_2, label1, label2, title, ax):
     # plt.figure(figsize=(10, 5))
     ax.plot(data_1, 'b-', label=label1)
     ax.plot(data_2, 'r--', label=label2)
-    ax.legend()
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Volume Sold')
-    
-    
     # Prepare the specific configuration text
     original_g = config["modelTraining"]["originalG"]
-    config_text = f"inferenceMethod: {config['inferenceMethod']}\n"
+    config_text = ""
     if config["inferenceMethod"] == "mcmc":
         mcmc_params = config["inferenceParams"]["mcmc"]
         config_text += "inferenceParams: "
         for key, value in mcmc_params.items():
             config_text += f"  {key}: {value}\n"
-    if config["inferenceMethod"] == "torch_autograd":
-        learning_rate = config["modelTraining"]["learningRate"]
-        config_text += f"learningRate: {learning_rate} "
-        
+    # if config["inferenceMethod"] == "torch_autograd":
+    #     gd_params = config["modelTraining"]
+    #     config_text += "inferenceParams: "
+    #     for key, value in gd_params.items():
+    #         if key != "modelPath" and key != "nSplits":
+    #             config_text += f"  {key}: {value}\n"
+
     config_text += f"originalG: {original_g}"
-    
-   # Add the configuration text to the plot
-    #plt.gcf().text(0.15, 0.85, config_text, fontsize=8, va='top', wrap=True)
-    # fig = ax.get_figure()
-    # fig.text(0.15, 0.85, config_text, fontsize=8, va='top', wrap=True)
-    ax.set_title(title)
-    ax.text(0.15, 0.5, config_text, fontsize=7, va='top', wrap=True)
+    # ax.text(0.15, 0.8, config_text, fontsize=7, va='top', wrap=True)
+    ax.set_title(
+        f'Simulated G = {"{:.1f}".format(config["modelTraining"]["originalG"])}'
+        )
 
 def training_plot_metrics(train_losses, val_losses, test_loss, train_mse_list, val_mse_list, test_mse):
     """
@@ -96,8 +91,8 @@ def negative_log_likelihood(params, Y_t, X_t, Z_t):
 
     if config['inferenceMethod'] == "pertub_gradient_descent" or config['inferenceMethod'] == "mcmc":
         G, *coeffs = params
-        if config["modelTraining"]["addSigmoid"]:
-            G = sigmoid(G)
+        # if config["modelTraining"]["addSigmoid"]:
+        #     G = sigmoid(G)
 
         eta = np.array(coeffs[:X_t.shape[1]])
         zeta = np.array(coeffs[X_t.shape[1]:])

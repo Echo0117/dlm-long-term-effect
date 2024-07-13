@@ -8,25 +8,26 @@
     "independent_variables_Z": ["distribution_off_off", "discount_price_comp_to_pr_off_off"]
 
   },
-  "inferenceMethod": "mcmc", 
+  "inferenceMethod": "torch_autograd", 
   "modelTraining": {
-    "epoch": 100,
-    "learningRate": 0.001,
+    "epoch": 200,
+    "learningRate": 0.01,
     "originalG":0.7,
-    "theta0": 0,
-    "nSplits": 5,
     "addSigmoid": false,
-    "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl"
+    "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl",
+    "nSplits": 5,
+    "theta0": 0
   },
   "simulationRecovery":{
-    "independentRun": 5,
-    "paramsSavedPath": "simulated_parameters_1.csv"
+    "independentRun": 4,
+    "paramsSavedPath": "simulated_parameters_4.csv",
+    "simulatedParamSavedPath": "temp_simulated.csv"
   },
   "inferenceParams":{
     "mcmc":{
       "nWalkers": 32,
-      "numSamples": 2000,
-      "burnInSteps": 200,
+      "numSamples": 1000,
+      "burnInSteps": 100,
       "numStepsBetweenSamples": 50,
       "perturbationNoise": 0.0001
     }
