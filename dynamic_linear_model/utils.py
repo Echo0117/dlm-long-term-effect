@@ -32,7 +32,7 @@ def plot(data_1, data_2, label1, label2, title, ax):
     config_text += f"originalG: {original_g}"
     # ax.text(0.15, 0.8, config_text, fontsize=7, va='top', wrap=True)
     ax.set_title(
-        f'Simulated G = {"{:.1f}".format(config["modelTraining"]["originalG"])}'
+        f'{title} Simulated G = {"{:.1f}".format(config["modelTraining"]["originalG"])}'
     )
 
 

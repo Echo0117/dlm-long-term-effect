@@ -16,29 +16,6 @@ import dynamic_linear_model.utils as utils
 from dynamic_linear_model.model import DynamicLinearModel
 from dynamic_linear_model.evaluations.metrics import Metrics
 from dynamic_linear_model.inference.samplying_method import MCMCSamplingMethod
-import multiprocessing
-from multiprocessing import Pool
-
-
-class ClippedAdam(torch.optim.Adam):
-    def __init__(
-        self,
-        params,
-        lr=0.001,
-        betas=(0.9, 0.999),
-        eps=1e-08,
-        weight_decay=0,
-        amsgrad=False,
-    ):
-        super(ClippedAdam, self).__init__(params, lr, betas, eps, weight_decay, amsgrad)
-
-    def step(self, closure=None):
-        super(ClippedAdam, self).step(closure)
-        with torch.no_grad():
-            for group in self.param_groups:
-                for param in group["params"]:
-                    if param.requires_grad:
-                        param.data.clamp_(0, 1)
 
 
 class SimulationRecovery:
@@ -58,42 +35,6 @@ class SimulationRecovery:
         self.n_splits = config["modelTraining"]["nSplits"]
         self.metrics = Metrics()
         self.model = DynamicLinearModel()
-
-    # def run_simulation_task(self, run_id):
-    #     """
-    #     Function to run a single simulation task. This will be executed in parallel.
-    #     """
-    #     print("independentRun: ", run_id)
-    #     initial_params = self._initialize_parameters()
-    #     try:
-    #         params = self._optimize(self.Y_t, self.X_t, self.Z_t, initial_params)
-    #     except UnboundLocalError as e:
-    #         logging.error(e)
-    #         return None, None, None
-
-    #     Y_predicted = self._get_predicted_Y(params, self.X_t, self.Z_t, self.Y_t)
-    #     return params, Y_predicted, params[0].detach().numpy()
-
-    # def recovery_for_simulation(self):
-    #     """
-    #     Train the model for multiple iterations and record statistics of parameters.
-    #     """
-    #     num_runs = config["simulationRecovery"]["independentRun"]
-
-    #     with Pool(processes=multiprocessing.cpu_count()) as pool:
-    #         results = pool.starmap(self.run_simulation_task, [(i,) for i in range(num_runs)])
-
-    #     # Filter out failed runs
-    #     results = [res for res in results if res[0] is not None]
-
-    #     params_list = [res[0] for res in results]
-    #     Y_predicted_list = [res[1] for res in results]
-    #     g_list = [res[2] for res in results]
-
-    #     # Calculate statistics
-    #     self._calculate_statistics(params_list)
-    #     self._plot_params(params_list)
-    #     return Y_predicted_list
 
     def recovery_for_simulation(self, ax, ax_training, ax_optim_g):
         """
@@ -129,7 +70,7 @@ class SimulationRecovery:
             params_list.append(self.model.named_parameters())
             Y_predicted_list.append(Y_predicted.detach().numpy())
             g_list.append(self.model.G)
-            self.save_model()
+            # self.save_model()
 
         # Calculate statistics
         Gs, etas, zetas = self._plot_params(params_list, ax)
@@ -139,7 +80,7 @@ class SimulationRecovery:
 
     # Define the custom loss function
     def mse_loss(self, predicted_Y, Y):
-        return 0.5 * torch.sum((predicted_Y - Y) ** 2)
+        return 0.5 * torch.mean((predicted_Y - Y) ** 2)
 
     def _optimize(self, Y_t, X_t, Z_t, ax, ax_1, num_run):
         """
@@ -164,14 +105,17 @@ class SimulationRecovery:
                 print("zetagself.model.parameters()",param.clone().detach().numpy())
 
         optimizer = optim.SGD(
-            self.model.parameters(), lr=config["modelTraining"]["learningRate"]
+            self.model.parameters(), lr=config["modelTraining"]["learningRate"],
+            momentum = 0.9,
+            weight_decay = 1e-4
         )
 
         losses, params_before, params_after_optim = [], [], []
         Gs, etas, zetas = [], [], []
+        self.model.train()
         for epoch in range(self.epoch):
             try:
-                self.model.train()
+                # print("self.model.G.dataself.model.G.data", self.model.G.data)
                 params_before.append(self.model.G.data.clone().numpy())
                 # Zero the parameter gradients
                 optimizer.zero_grad()
@@ -194,10 +138,11 @@ class SimulationRecovery:
                 zetas.append(zeta)
             except Exception as e:
                 # Plot Gs
+                
                 plt.figure()
                 plt.plot(Gs)
                 plt.title('Gs over iterations')
-                plt.xlabel('Iteration')
+                plt.xlabel('epoch')
                 plt.ylabel('G value')
                 plt.show()
 
@@ -205,104 +150,37 @@ class SimulationRecovery:
                 plt.figure()
                 for i, eta in enumerate(etas):
                     plt.plot(eta, label=f'Eta dimension {i}')
-                plt.title('Etas over iterations')
+                plt.title('Etas over epoch')
                 plt.xlabel('Iteration')
                 plt.ylabel('Eta value')
                 plt.legend()
                 plt.show()
 
-                # Plot zetas[0]
+                # Plot zetas
                 plt.figure()
                 for i, zeta in enumerate(zetas):
                     plt.plot(zeta, label=f'Zeta dimension {i}')
-                plt.title('Zetas over iterations')
-                plt.xlabel('Iteration')
+                plt.title('Zetas over epoch')
+                plt.xlabel('epoch')
                 plt.ylabel('Zeta value')
-                plt.show()
-
-                # Plot zetas[1]
-                plt.figure()
-                plt.plot(zetas[1])
-                plt.title('Zetas[1] over iterations')
-                plt.xlabel('Iteration')
-                plt.ylabel('Zeta[1] value')
                 plt.show()
 
                 # Plot losses
                 plt.figure()
                 plt.plot(losses)
-                plt.title('Losses over iterations')
-                plt.xlabel('Iteration')
+                plt.title('Losses over epoch')
+                plt.xlabel('epoch')
                 plt.ylabel('Loss value')
                 plt.show()
-                break
 
+                logging.error("_optimize error", e)
+                break
+  
         self._plot_metrics(losses, ax, num_run)
         self._plot_g(params_before, params_after_optim, ax_1)
         # After training, ensure that the parameters have been updated
         for i, param in enumerate(self.model.parameters()):
             logging.info(f"Paramssss {i}: {param.data}")
-
-    # def _optimize_origin(self, Y_t, X_t, Z_t, params, ax, ax_1, num_run):
-    #     """
-    #     Optimize the parameters using PyTorch's autograd and SGD optimizer.
-
-    #     Parameters:
-    #     Y_t (torch.Tensor): Dependent variable vector Y.
-    #     X_t (torch.Tensor): Independent variables matrix X.
-    #     Z_t (torch.Tensor): Independent variables matrix Z.
-    #     params (list): List of initial parameters (G, eta, zeta).
-
-    #     Returns:
-    #     list: Optimized parameters.
-    #     """
-
-    #     if config["inferenceMethod"] == "torch_autograd":
-    #         print("before optim", params)
-    #         optimizer = optim.SGD(
-    #             params,
-    #             lr=config["modelTraining"]["learningRate"],
-    #             # momentum=0.1,  # Momentum
-    #             # weight_decay=1e-5,  # Weight decay for regularization
-    #             # nesterov=True,  # Use Nesterov Accelerated Gradient
-    #         )
-    #         # optimizer = optim.Adam(params, lr=config["modelTraining"]["learningRate"], weight_decay=0.001)
-    #         losses = []
-    #         params_before = []
-    #         params_after_optim = []
-    #         params_after_sigmoid = []
-    #         for epoch in range(self.epoch):
-    #             loss, sigmoid_g = utils.negative_log_likelihood(params, Y_t, X_t, Z_t)
-    #             params_before.append(params[0].data.clone().numpy())
-    #             # Backpropagation
-    #             loss.backward()
-    #             optimizer.step()
-    #             optimizer.zero_grad()
-
-    #             params_after_optim.append(params[0].data.clone().numpy())
-    #             # if config["modelTraining"]["addSigmoid"]:
-    #             #     params[0].data = torch.sigmoid(params[0].data)
-
-    #             params_after_sigmoid.append(sigmoid_g)
-    #             print("sigmoid_g", sigmoid_g)
-
-    #             if epoch % 100 == 0:
-    #                 logging.info(f"epoch {epoch}: Loss = {loss.item()}")
-
-    #             losses.append(loss.item())
-    #             # mse_list.append(mse)
-
-    #         self._plot_metrics(losses, ax, num_run)
-    #         self._plot_g(params_before, params_after_optim, params_after_sigmoid, ax_1)
-    #         # After training, ensure that the parameters have been updated
-    #         for i, param in enumerate(params):
-    #             logging.info(f"Paramssss {i}: {param.data}")
-
-    #     elif config["inferenceMethod"] == "mcmc":
-    #         params = MCMCSamplingMethod().extract_parameters(params, Y_t, X_t, Z_t)
-
-    #     print("after optim", params)
-    #     return params
 
     def save_model(self):
         """
@@ -508,7 +386,7 @@ class SimulationRecovery:
         df["Simulated"] = df_simulated_existing["Simulated"][: len(rows)]
         new_df = pd.concat([df, df_existing], axis=0)
         empty_row = pd.DataFrame([[None] * len(new_df.columns)], columns=new_df.columns)
-        new_df = pd.concat([new_df, empty_row], ignore_index=True)
+        new_df = pd.concat([empty_row, new_df], ignore_index=True)
 
         # Save to CSV
         new_df.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
@@ -598,7 +476,7 @@ class DataSimulation:
         self.model.G = self.G
         self.model.eta = self.eta
         self.model.zeta = self.zeta
-        predicted_Y, _, _, _ = self.model.forward(self.X_t, self.Z_t)
+        predicted_Y, _, _, _ = self.model.forward(self.X_t, self.Z_t, is_simulation=True)
         return predicted_Y
 
     def get_simulation_results(self) -> dict:
@@ -607,7 +485,7 @@ class DataSimulation:
 
         :return: DataFrame containing actual and predicted Y values.
         """
-        predicted_Y = self.generate_simulated_Y().detach().numpy()
-        results_Y = {"actual_Y": self.Y_t, "simulated_Y": predicted_Y}
+        simulated_Y = self.generate_simulated_Y().detach().numpy()
+        results_Y = {"actual_Y": self.Y_t, "simulated_Y": simulated_Y}
         utils.log_parameters_results(self.G, self.eta, self.zeta)
         return results_Y

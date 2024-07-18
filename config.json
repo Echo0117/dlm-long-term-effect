@@ -1,6 +1,6 @@
 {
   "dataset": {
-    "path": "/Users/echo/Downloads/df_germany.csv",
+    "path": "/Users/pr059704/Downloads/df_germany.csv",
     "brand": "absolut",
     "dependent_variable": "volume_so_off",
     "independent_variables_X": ["january", "february", "march", "april", "may", "june",
@@ -12,7 +12,7 @@
   "inferenceMethod": "torch_autograd", 
   "modelTraining": {
     "epoch": 50,
-    "learningRate": 1e-3,
+    "learningRate": 1e-4,
     "originalG":0.7,
     "addSigmoid": true,
     "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl",
