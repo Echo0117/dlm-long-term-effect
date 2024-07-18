@@ -4,14 +4,16 @@ import numpy as np
 import torch
 from config import config
 
+
 def convert_normalized_data(scaler, data):
     convert_data = scaler.inverse_transform(data.reshape(-1, 1)).flatten()
     return convert_data
 
+
 def plot(data_1, data_2, label1, label2, title, ax):
     # plt.figure(figsize=(10, 5))
-    ax.plot(data_1, 'b-', label=label1)
-    ax.plot(data_2, 'r--', label=label2)
+    ax.plot(data_1, "b-", label=label1)
+    ax.plot(data_2, "r--", label=label2)
     # Prepare the specific configuration text
     original_g = config["modelTraining"]["originalG"]
     config_text = ""
@@ -31,9 +33,12 @@ def plot(data_1, data_2, label1, label2, title, ax):
     # ax.text(0.15, 0.8, config_text, fontsize=7, va='top', wrap=True)
     ax.set_title(
         f'Simulated G = {"{:.1f}".format(config["modelTraining"]["originalG"])}'
-        )
+    )
 
-def training_plot_metrics(train_losses, val_losses, test_loss, train_mse_list, val_mse_list, test_mse):
+
+def training_plot_metrics(
+    train_losses, val_losses, test_loss, train_mse_list, val_mse_list, test_mse
+):
     """
     Plot training and validation loss and accuracy, and test metrics.
 
@@ -51,28 +56,30 @@ def training_plot_metrics(train_losses, val_losses, test_loss, train_mse_list, v
 
     # Plot losses
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, train_losses, 'bo-', label='Training loss')
-    plt.plot(epochs, val_losses, 'ro-', label='Validation loss')
+    plt.plot(epochs, train_losses, "bo-", label="Training loss")
+    plt.plot(epochs, val_losses, "ro-", label="Validation loss")
     # plt.axhline(y=test_loss, color='g', linestyle='-', label='Test loss')
-    plt.title('Training, Validation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
+    plt.title("Training, Validation Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
     plt.legend()
 
     # Plot accuracies
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, train_mse_list, 'bo-', label='Training accuracy')
-    plt.plot(epochs, val_mse_list, 'ro-', label='Validation accuracy')
+    plt.plot(epochs, train_mse_list, "bo-", label="Training accuracy")
+    plt.plot(epochs, val_mse_list, "ro-", label="Validation accuracy")
     # plt.axhline(y=test_mse, color='g', linestyle='-', label='Test accuracy')
-    plt.title('Training, Validation MSE')
-    plt.xlabel('Epoch')
-    plt.ylabel('MSE')
+    plt.title("Training, Validation MSE")
+    plt.xlabel("Epoch")
+    plt.ylabel("MSE")
     plt.legend()
 
     plt.tight_layout()
 
-def sigmoid(x):  
+
+def sigmoid(x):
     return np.exp(-np.logaddexp(0, -x))
+
 
 def negative_log_likelihood(params, Y_t, X_t, Z_t):
     """
@@ -89,24 +96,27 @@ def negative_log_likelihood(params, Y_t, X_t, Z_t):
     """
     T = len(Y_t)
 
-    if config['inferenceMethod'] == "pertub_gradient_descent" or config['inferenceMethod'] == "mcmc":
+    if (
+        config["inferenceMethod"] == "pertub_gradient_descent"
+        or config["inferenceMethod"] == "mcmc"
+    ):
         G, *coeffs = params
-        # if config["modelTraining"]["addSigmoid"]:
-        #     G = sigmoid(G)
+        if config["modelTraining"]["addSigmoid"]:
+            G = sigmoid(G)
 
-        eta = np.array(coeffs[:X_t.shape[1]])
-        zeta = np.array(coeffs[X_t.shape[1]:])
+        eta = np.array(coeffs[: X_t.shape[1]])
+        zeta = np.array(coeffs[X_t.shape[1] :])
         theta_t = np.zeros(T)
         neg_log_likelihood = 0
 
         for t in range(T):
             if t > 0:
-                theta_t[t] = G * theta_t[t-1] + np.dot(Z_t[t-1], zeta / 2)
-            
-            predicted_Y_t = theta_t[t] + np.dot(X_t[t], eta) + np.dot(Z_t[t], zeta / 2)
-            neg_log_likelihood -= 0.5 * ((Y_t[t] - predicted_Y_t)**2)
-    
-    elif config['inferenceMethod'] == "torch_autograd":
+                theta_t[t] = G * theta_t[t - 1] + np.dot(Z_t[t - 1], zeta / 2)
+
+            predicted_Y_t = config["modelTraining"]["addWeight"] * theta_t[t] + np.dot(X_t[t], eta) + np.dot(Z_t[t], zeta / 2)
+            neg_log_likelihood -= 0.5 * ((Y_t[t] - predicted_Y_t) ** 2)
+
+    elif config["inferenceMethod"] == "torch_autograd":
         G, eta, zeta = params
         if config["modelTraining"]["addSigmoid"]:
             G = torch.sigmoid(G)
@@ -116,18 +126,27 @@ def negative_log_likelihood(params, Y_t, X_t, Z_t):
 
         for t in range(T):
             if t > 0:
-                theta_t[t] = G * theta_t[t-1].clone() + torch.dot(Z_t[t-1], zeta / 2)
+                theta_t[t] = G * theta_t[t - 1].clone() + torch.dot(
+                    Z_t[t - 1], zeta / 2
+                )
 
-            predicted_Y_t = theta_t[t] + torch.dot(X_t[t], eta) + torch.dot(Z_t[t], zeta / 2)
-            neg_log_likelihood += 0.5 * ((Y_t[t] - predicted_Y_t)**2)
+            predicted_Y_t = (
+                config["modelTraining"]["addWeight"] * theta_t[t] + torch.dot(X_t[t], eta) + torch.dot(Z_t[t], zeta / 2)
+            )
+            neg_log_likelihood += 0.5 * ((Y_t[t] - predicted_Y_t) ** 2)
 
             # Add checks for numerical stability
             if torch.isnan(predicted_Y_t) or torch.isinf(predicted_Y_t):
-                logging.warn(f"Numerical instability at step {t}. Predicted Y_t: {predicted_Y_t.item()}")
+                logging.warn(
+                    f"Numerical instability at step {t}. Predicted Y_t: {predicted_Y_t.item()}"
+                )
                 break
-    return neg_log_likelihood
+    return neg_log_likelihood, G.clone().detach().numpy()
 
-def log_parameters_results(simulated_G=None, simulated_eta=None, simulated_zeta=None, params=None):
+
+def log_parameters_results(
+    simulated_G=None, simulated_eta=None, simulated_zeta=None, params=None
+):
     """
     Log the simulation results to a log file.
 

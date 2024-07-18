@@ -39,8 +39,8 @@ def main(X_t, Z_t, Y_t, do_data_simulation=False):
         print(f"File {file_path} and {file_simulated_path} does not exist.")
 
     # G = config["modelTraining"]["originalG"]
-    G_list = np.arange(0.1, 1.0, 0.2)
-    # G_list = [0.1, 0.6, 0.9]
+    # G_list = np.arange(0.1, 1.0, 0.3)
+    G_list = [0.1, 0.6, 0.9]
     fig, axs = plt.subplots(len(G_list), 2, figsize=(16, 10))
     fig_optim_g, axs_optim_g = plt.subplots(len(G_list), config["simulationRecovery"]["independentRun"], figsize=(18, 12))
     fig_training , axs_training = plt.subplots(len(G_list), config["simulationRecovery"]["independentRun"], figsize=(18, 12))
@@ -50,16 +50,18 @@ def main(X_t, Z_t, Y_t, do_data_simulation=False):
         if config['inferenceMethod'] == "torch_autograd":
             X_t = torch.tensor(X_t, dtype=torch.float32)
             Z_t = torch.tensor(Z_t, dtype=torch.float32)
+            Y_t = torch.tensor(Y_t, dtype=torch.float32)
 
         # Data simulation
         if do_data_simulation:
-            data_simulation = DataSimulation(X_t, Z_t, Y_t, G, config["modelTraining"]["theta0"])
+            data_simulation = DataSimulation(X_t, Z_t, Y_t, G)
             simulated_results = data_simulation.get_simulation_results()
-            Y_t = simulated_results['simulated_Y']
-            _, _, scaler_Y = data_preprocessing.get_normalized_scaler()
+            simulated_Y = simulated_results['simulated_Y']
+            print("simulated_Ysimulated_Y", simulated_Y)
+            # _, _, scaler_Y = data_preprocessing.get_normalized_scaler()
             # converted_Y_t = convert_normalized_data(scaler_Y, Y_t)
             # print("Y_tY_tY_t", Y_t)
-            # plt.plot(Y_t, label=f'indenpendt run when G = {G}')
+            # plt.plot(converted_Y_t, label=f'indenpendt run when G = {G}')
         
             # # plot(converted_Y_t, converted_Y_t, 'Simulated Y_t', 'Predicted Y_t', "Simulated vs Predicted", ax[1])
             Y_predicted_list = SimulationRecovery(X_t, Z_t, Y_t).recovery_for_simulation(ax[0], ax_training, ax_optim_g)
@@ -84,7 +86,7 @@ def main(X_t, Z_t, Y_t, do_data_simulation=False):
 
             # Plot actual vs simulated if data simulation was performed
             if do_data_simulation:
-                plot(converted_Y_t, converted_predicted_Y, 'Simulated Y_t', 'Predicted Y_t', "Simulated vs Predicted", ax[1])
+                plot(simulated_Y, predicted_Y, 'Simulated Y_t', 'Predicted Y_t', "Simulated vs Predicted", ax[1])
                 continue
             else:
                 plot(converted_Y_t, converted_predicted_Y, 'Actual Y_t', 'Predicted Y_t', "Actual vs Predicted", ax[1])
