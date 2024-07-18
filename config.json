@@ -3,23 +3,25 @@
     "path": "/Users/echo/Downloads/df_germany.csv",
     "brand": "absolut",
     "dependent_variable": "volume_so_off",
-    "independent_variables_X": ["relative_gap_to_90th_price_off_off", "off_trade_visibility_off", "digital_off", "digital_social_media_off","out_of_home_off",
-    "television_off", "brand_experience_off"],
-    "independent_variables_Z": ["distribution_off_off", "discount_price_comp_to_pr_off_off"]
-
+    "independent_variables_X": ["january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"],
+    "independent_variables_Z": ["relative_gap_to_90th_price_off_off", "off_trade_visibility_off", "digital_off", "digital_social_media_off","out_of_home_off",
+    "television_off", "brand_experience_off", "distribution_off_off", "discount_price_comp_to_pr_off_off"],
+    "isNormalizeX": false
   },
   "inferenceMethod": "torch_autograd", 
   "modelTraining": {
-    "epoch": 200,
-    "learningRate": 0.01,
+    "epoch": 50,
+    "learningRate": 1e-3,
     "originalG":0.7,
-    "addSigmoid": false,
+    "addSigmoid": true,
     "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl",
     "nSplits": 5,
-    "theta0": 0
+    "theta0": 0,
+    "addWeight": 1
   },
   "simulationRecovery":{
-    "independentRun": 4,
+    "independentRun": 2,
     "paramsSavedPath": "simulated_parameters_4.csv",
     "simulatedParamSavedPath": "temp_simulated.csv"
   },
