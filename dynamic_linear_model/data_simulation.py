@@ -100,13 +100,14 @@ class SimulationRecovery:
                     if final_loss < best_final_loss:
                         best_final_loss = final_loss
                         best_Y_predicted = Y_predicted
+                        best_run_number = futures.index(future)
 
         # Plot metrics after multiprocessing
         plotter.plot_metrics_multiprocess(metrics_list, ax_training, ax_optim_g)
 
         # Calculate statistics
         Gs, etas, zetas, gammas = plotter.plot_params(params_list, ax)
-        utils.calculate_statistics(Gs, etas, zetas, gammas)
+        utils.calculate_statistics(Gs, etas, zetas, gammas, best_run_number)
 
         return best_Y_predicted
  
@@ -140,8 +141,8 @@ class SimulationRecovery:
         optimizer = optim.SGD(
             self.model.parameters(),
             lr=config["modelTraining"]["learningRate"],
-            momentum=0.7,
-            weight_decay=1e-4,
+            momentum=config["modelTraining"]["momentum"],
+            weight_decay=config["modelTraining"]["weightDecay"]
         )
 
         losses, params_before, params_after_optim = [], [], []

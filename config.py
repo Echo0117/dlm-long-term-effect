@@ -1,4 +1,4 @@
-import json
+import json5
 import os
 
 import torch
@@ -11,7 +11,7 @@ read json config file。
 """
 f = open(root_path + "/config.json", encoding="utf-8")
 
-config = json.load(f)
+config = json5.load(f)
 
 config["dataset"]["xDim"] = len(config["dataset"]["independent_variables_X"])
 config["dataset"]["zDim"] = len(config["dataset"]["independent_variables_Z"])

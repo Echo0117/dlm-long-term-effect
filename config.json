@@ -11,17 +11,17 @@
   },
   "inferenceMethod": "torch_autograd", 
   "modelTraining": {
-    "epoch": 100,
+    "epoch": 1000,
     "learningRate": 1e-4,
-    "originalG": 0.7,
+    "momentum": 0.7,
+    "weightDecay": 1e-4,
+    "originalG": 0.0, // originalG is an initialization for plotting, no need to change.
     "addSigmoid": true,
-    "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl",
-    "nSplits": 5,
-    "addWeight": 1
+    "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl"
   },
   "simulationRecovery":{
-    "independentRun": 2,
-    "ListG": [0.1, 0.9],
+    "independentRun": 1,
+    "ListG": [0.1, 0.6, 0.9],
     "paramsSavedPath": "simulated_parameters_4.csv",
     "simulatedParamSavedPath": "temp_simulated.csv"
   },

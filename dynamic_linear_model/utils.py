@@ -54,7 +54,7 @@ def log_parameters_results(
 
 
 def calculate_statistics(
-    Gs: list, etas: list, zetas: list, gammas: list
+    Gs: list, etas: list, zetas: list, gammas: list, best_run_number: int
 ) -> None:
     """
     Calculate and print the statistics of the parameters from multiple runs.
@@ -77,7 +77,6 @@ def calculate_statistics(
             "mean": np.mean(data, axis=axis),
             "std": np.std(data, axis=axis),
             "median": np.median(data, axis=axis),
-            "max": np.max(data, axis=axis),
         }
 
     G_stats = compute_stats(Gs)
@@ -93,7 +92,7 @@ def calculate_statistics(
             G_stats["mean"],
             G_stats["std"],
             G_stats["median"],
-            G_stats["max"],
+            Gs[best_run_number],  # Add best_loss for G
         ]
     ]
 
@@ -106,7 +105,9 @@ def calculate_statistics(
                     param_stats["mean"][i],
                     param_stats["std"][i],
                     param_stats["median"][i],
-                    param_stats["max"][i],
+                    param_data[:, i][
+                        best_run_number
+                    ],  # Add best_loss for each parameter
                 ]
             )
 
@@ -117,7 +118,7 @@ def calculate_statistics(
     columns = (
         ["Param"]
         + [f"iteration {i+1}" for i in range(len(Gs))]
-        + ["Mean", "Std", "Median", "Max"]
+        + ["Mean", "Std", "Median", "Best Loss"]
     )
     df = pd.DataFrame(rows, columns=columns)
 
@@ -143,7 +144,8 @@ def calculate_statistics(
     new_df.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
 
     print("Simulation results saved to simulation_results.csv")
-        
+
+
 class Plotter:
     def plot(
         self, data_1, data_2, label1: str, label2: str, title: str, ax: Axes
@@ -187,23 +189,54 @@ class Plotter:
         ax_training (list): List of matplotlib axes for training metrics.
         ax_optim_g (list): List of matplotlib axes for optimization metrics.
         """
+        start_epoch = 10
+
+        # Ensure ax_training and ax_optim_g are lists of axes
+        if not isinstance(ax_training, list):
+            ax_training = [ax_training]
+        if not isinstance(ax_optim_g, list):
+            ax_optim_g = [ax_optim_g]
+
         for (
             (params_before, params_after_optim, losses),
             ax_training_sub,
             ax_optim_g_sub,
         ) in zip(metrics_list, ax_training, ax_optim_g):
             ax_training_sub.plot(
-                range(config["modelTraining"]["epoch"]), losses, label=f"Loss"
+                range(start_epoch, config["modelTraining"]["epoch"]),
+                losses[start_epoch:],
+                label="Loss",
             )
+
+            # Annotate the last value of losses
+            last_epoch = config["modelTraining"]["epoch"] - 1
+            last_loss_value = losses[-1]
+            ax_training_sub.annotate(
+                f'{last_loss_value:.2f}',
+                xy=(last_epoch, last_loss_value),
+                xytext=(last_epoch + 1, last_loss_value),
+                arrowprops=dict(facecolor='black', shrink=0.05),
+            )
+
             ax_optim_g_sub.plot(
                 range(len(params_before)),
                 params_before,
                 label=f"G Before Optimization ",
             )
+
             ax_optim_g_sub.plot(
                 range(len(params_after_optim)),
                 params_after_optim,
                 label=f"G After Optimization",
+            )
+
+            # Annotate the last value of Optimized G
+            last_optimized_g_value = params_after_optim[-1]
+            ax_optim_g_sub.annotate(
+                f'{last_optimized_g_value:.2f}',
+                xy=(last_epoch, last_optimized_g_value),
+                xytext=(last_epoch + 1, last_optimized_g_value),
+                arrowprops=dict(facecolor='black', shrink=0.05),
             )
 
     def plot_params(self, params_list: list, ax: Axes) -> tuple:
@@ -310,7 +343,6 @@ class Plotter:
         config_text += f"originalG: {original_g}"
         fig.text(0.05, 0.05, config_text, fontsize=7, va="top", wrap=True)
 
-
     def plot_metrics_singleprocess(self, losses: list, ax: Axes, num_run: int) -> None:
         """
         Plot training loss.
@@ -324,49 +356,3 @@ class Plotter:
         ax.set_title(
             f'Independent run {num_run} with G = {"{:.1f}".format(config["modelTraining"]["originalG"])}',
         )
-
-    def training_plot_metrics(
-        self,
-        train_losses,
-        val_losses,
-        test_loss,
-        train_mse_list,
-        val_mse_list,
-        test_mse,
-    ) -> None:
-        """
-        Plot training and validation loss and accuracy, and test metrics.
-
-        Parameters:
-        train_losses (list): List of training losses.
-        val_losses (list): List of validation losses.
-        test_loss (float): Test loss.
-        train_mse_list (list): List of training accuracies.
-        val_mse_list (list): List of validation accuracies.
-        test_mse (float): Test MSE.
-        """
-        epochs = range(1, config["modelTraining"]["epoch"] + 1)
-
-        plt.figure(figsize=(14, 6))
-
-        # Plot losses
-        plt.subplot(1, 2, 1)
-        plt.plot(epochs, train_losses, "bo-", label="Training loss")
-        plt.plot(epochs, val_losses, "ro-", label="Validation loss")
-        # plt.axhline(y=test_loss, color='g', linestyle='-', label='Test loss')
-        plt.title("Training, Validation Loss")
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.legend()
-
-        # Plot accuracies
-        plt.subplot(1, 2, 2)
-        plt.plot(epochs, train_mse_list, "bo-", label="Training MSE")
-        plt.plot(epochs, val_mse_list, "ro-", label="Validation MSE")
-        # plt.axhline(y=test_mse, color='g', linestyle='-', label='Test MSE')
-        plt.title("Training, Validation MSE")
-        plt.xlabel("Epoch")
-        plt.ylabel("MSE")
-        plt.legend()
-
-        plt.tight_layout()
