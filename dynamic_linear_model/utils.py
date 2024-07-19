@@ -1,7 +1,12 @@
 import logging
+import os
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
+
 from config import config
 
 
@@ -10,138 +15,22 @@ def convert_normalized_data(scaler, data):
     return convert_data
 
 
-def plot(data_1, data_2, label1, label2, title, ax):
-    # plt.figure(figsize=(10, 5))
-    ax.plot(data_1, "b-", label=label1)
-    ax.plot(data_2, "r--", label=label2)
-    # Prepare the specific configuration text
-    original_g = config["modelTraining"]["originalG"]
-    config_text = ""
-    if config["inferenceMethod"] == "mcmc":
-        mcmc_params = config["inferenceParams"]["mcmc"]
-        config_text += "inferenceParams: "
-        for key, value in mcmc_params.items():
-            config_text += f"  {key}: {value}\n"
-    # if config["inferenceMethod"] == "torch_autograd":
-    #     gd_params = config["modelTraining"]
-    #     config_text += "inferenceParams: "
-    #     for key, value in gd_params.items():
-    #         if key != "modelPath" and key != "nSplits":
-    #             config_text += f"  {key}: {value}\n"
-
-    config_text += f"originalG: {original_g}"
-    # ax.text(0.15, 0.8, config_text, fontsize=7, va='top', wrap=True)
-    ax.set_title(
-        f'{title} Simulated G = {"{:.1f}".format(config["modelTraining"]["originalG"])}'
-    )
-
-
-def training_plot_metrics(
-    train_losses, val_losses, test_loss, train_mse_list, val_mse_list, test_mse
-):
+def delete_existing_files(file_path, file_simulated_path):
     """
-    Plot training and validation loss and accuracy, and test metrics.
+    Check if the specified files exist and delete them if they do.
 
     Parameters:
-    train_losses (list): List of training losses.
-    val_losses (list): List of validation losses.
-    test_loss (float): Test loss.
-    train_mse_list (list): List of training accuracies.
-    val_mse_list (list): List of validation accuracies.
-    test_mse (float): Test mse.
+    file_path (str): Path to the first file to be checked and deleted.
+    file_simulated_path (str): Path to the second file to be checked and deleted.
     """
-    epochs = range(1, config["modelTraining"]["epoch"] + 1)
-
-    plt.figure(figsize=(14, 6))
-
-    # Plot losses
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs, train_losses, "bo-", label="Training loss")
-    plt.plot(epochs, val_losses, "ro-", label="Validation loss")
-    # plt.axhline(y=test_loss, color='g', linestyle='-', label='Test loss')
-    plt.title("Training, Validation Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.legend()
-
-    # Plot accuracies
-    plt.subplot(1, 2, 2)
-    plt.plot(epochs, train_mse_list, "bo-", label="Training accuracy")
-    plt.plot(epochs, val_mse_list, "ro-", label="Validation accuracy")
-    # plt.axhline(y=test_mse, color='g', linestyle='-', label='Test accuracy')
-    plt.title("Training, Validation MSE")
-    plt.xlabel("Epoch")
-    plt.ylabel("MSE")
-    plt.legend()
-
-    plt.tight_layout()
-
-
-def sigmoid(x):
-    return np.exp(-np.logaddexp(0, -x))
-
-
-def negative_log_likelihood(params, Y_t, X_t, Z_t):
-    """
-    Calculate the negative log likelihood for the given parameters and data.
-
-    Parameters:
-    params (list): List of parameters (G, eta, zeta).
-    Y_t (np.ndarray): Dependent variable vector Y.
-    X_t (np.ndarray): Independent variables matrix X.
-    Z_t (np.ndarray): Independent variables matrix Z.
-
-    Returns:
-    float: Negative log likelihood value.
-    """
-    T = len(Y_t)
-
-    if (
-        config["inferenceMethod"] == "pertub_gradient_descent"
-        or config["inferenceMethod"] == "mcmc"
-    ):
-        G, *coeffs = params
-        if config["modelTraining"]["addSigmoid"]:
-            G = sigmoid(G)
-
-        eta = np.array(coeffs[: X_t.shape[1]])
-        zeta = np.array(coeffs[X_t.shape[1] :])
-        theta_t = np.zeros(T)
-        neg_log_likelihood = 0
-
-        for t in range(T):
-            if t > 0:
-                theta_t[t] = G * theta_t[t - 1] + np.dot(Z_t[t - 1], zeta / 2)
-
-            predicted_Y_t = config["modelTraining"]["addWeight"] * theta_t[t] + np.dot(X_t[t], eta) + np.dot(Z_t[t], zeta / 2)
-            neg_log_likelihood -= 0.5 * ((Y_t[t] - predicted_Y_t) ** 2)
-
-    elif config["inferenceMethod"] == "torch_autograd":
-        G, eta, zeta = params
-        if config["modelTraining"]["addSigmoid"]:
-            G = torch.sigmoid(G)
-
-        theta_t = torch.zeros(T, dtype=torch.float32)
-        neg_log_likelihood = torch.tensor(0.0, dtype=torch.float32)
-
-        for t in range(T):
-            if t > 0:
-                theta_t[t] = G * theta_t[t - 1].clone() + torch.dot(
-                    Z_t[t - 1], zeta / 2
-                )
-
-            predicted_Y_t = (
-                config["modelTraining"]["addWeight"] * theta_t[t] + torch.dot(X_t[t], eta) + torch.dot(Z_t[t], zeta / 2)
-            )
-            neg_log_likelihood += 0.5 * ((Y_t[t] - predicted_Y_t) ** 2)
-
-            # Add checks for numerical stability
-            if torch.isnan(predicted_Y_t) or torch.isinf(predicted_Y_t):
-                logging.warn(
-                    f"Numerical instability at step {t}. Predicted Y_t: {predicted_Y_t.item()}"
-                )
-                break
-    return neg_log_likelihood, G.clone().detach().numpy()
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print(f"File {file_path} has been deleted successfully.")
+    elif os.path.exists(file_simulated_path):
+        os.remove(file_simulated_path)
+        print(f"File {file_simulated_path} has been deleted successfully.")
+    else:
+        print(f"Files {file_path} and {file_simulated_path} do not exist.")
 
 
 def log_parameters_results(
@@ -162,3 +51,322 @@ def log_parameters_results(
         logging.info(f"Simulated G: {simulated_G}")
         logging.info(f"Simulated eta: {simulated_eta}")
         logging.info(f"Simulated zeta: {simulated_zeta}")
+
+
+def calculate_statistics(
+    Gs: list, etas: list, zetas: list, gammas: list
+) -> None:
+    """
+    Calculate and print the statistics of the parameters from multiple runs.
+
+    Parameters:
+    Gs (list): List of G values.
+    etas (list): List of eta values.
+    zetas (list): List of zeta values.
+    gammas (list): List of gamma values.
+    """
+    Gs, etas, zetas, gammas = (
+        np.array(Gs),
+        np.array(etas),
+        np.array(zetas),
+        np.array(gammas),
+    )
+
+    def compute_stats(data, axis=None):
+        return {
+            "mean": np.mean(data, axis=axis),
+            "std": np.std(data, axis=axis),
+            "median": np.median(data, axis=axis),
+            "max": np.max(data, axis=axis),
+        }
+
+    G_stats = compute_stats(Gs)
+    eta_stats = compute_stats(etas, axis=0)
+    zeta_stats = compute_stats(zetas, axis=0)
+    gamma_stats = compute_stats(gammas, axis=0)
+
+    # Combine all statistics and iteration results into a single DataFrame
+    rows = [
+        [
+            "G",
+            *Gs.tolist(),
+            G_stats["mean"],
+            G_stats["std"],
+            G_stats["median"],
+            G_stats["max"],
+        ]
+    ]
+
+    def add_rows(param_name, param_data, param_stats):
+        for i in range(len(param_stats["mean"])):
+            rows.append(
+                [
+                    f"{param_name}{i+1}",
+                    *param_data[:, i].tolist(),
+                    param_stats["mean"][i],
+                    param_stats["std"][i],
+                    param_stats["median"][i],
+                    param_stats["max"][i],
+                ]
+            )
+
+    add_rows("η", etas, eta_stats)
+    add_rows("ζ", zetas, zeta_stats)
+    add_rows("γ", gammas, gamma_stats)
+
+    columns = (
+        ["Param"]
+        + [f"iteration {i+1}" for i in range(len(Gs))]
+        + ["Mean", "Std", "Median", "Max"]
+    )
+    df = pd.DataFrame(rows, columns=columns)
+
+    # Define the file path from the configuration
+    file_path = config["simulationRecovery"]["paramsSavedPath"]
+    file_simulated_path = config["simulationRecovery"]["simulatedParamSavedPath"]
+
+    df_existing = (
+        pd.read_csv(file_path) if os.path.exists(file_path) else pd.DataFrame()
+    )
+    df_simulated_existing = (
+        pd.read_csv(file_simulated_path)
+        if os.path.exists(file_simulated_path)
+        else pd.DataFrame()
+    )
+
+    df["Simulated"] = df_simulated_existing["Simulated"][: len(rows)]
+    new_df = pd.concat([df, df_existing], axis=0)
+    empty_row = pd.DataFrame([[None] * len(new_df.columns)], columns=new_df.columns)
+    new_df = pd.concat([empty_row, new_df], ignore_index=True)
+
+    # Save to CSV
+    new_df.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
+
+    print("Simulation results saved to simulation_results.csv")
+        
+class Plotter:
+    def plot(
+        self, data_1, data_2, label1: str, label2: str, title: str, ax: Axes
+    ) -> None:
+        """
+        Plot two datasets with given labels and title.
+
+        Parameters:
+        data_1 (array-like): First dataset to plot.
+        data_2 (array-like): Second dataset to plot.
+        label1 (str): Label for the first dataset.
+        label2 (str): Label for the second dataset.
+        title (str): Title of the plot.
+        ax (Axes): Matplotlib Axes object to plot on.
+        """
+        ax.plot(data_1, "b-", label=label1)
+        ax.plot(data_2, "r--", label=label2)
+
+        original_g = config["modelTraining"]["originalG"]
+        config_text = ""
+        if config["inferenceMethod"] == "mcmc":
+            mcmc_params = config["inferenceParams"]["mcmc"]
+            config_text += "inferenceParams: "
+            for key, value in mcmc_params.items():
+                config_text += f"  {key}: {value}\n"
+
+        config_text += f"originalG: {original_g}"
+
+        ax.set_title(
+            f'{title} Simulated G = {"{:.1f}".format(config["modelTraining"]["originalG"])}'
+        )
+
+    def plot_metrics_multiprocess(
+        self, metrics_list: list, ax_training: list, ax_optim_g: list
+    ) -> None:
+        """
+        Plot losses and parameter changes from collected metrics.
+
+        Parameters:
+        metrics_list (list): List of metrics from each run.
+        ax_training (list): List of matplotlib axes for training metrics.
+        ax_optim_g (list): List of matplotlib axes for optimization metrics.
+        """
+        for (
+            (params_before, params_after_optim, losses),
+            ax_training_sub,
+            ax_optim_g_sub,
+        ) in zip(metrics_list, ax_training, ax_optim_g):
+            ax_training_sub.plot(
+                range(config["modelTraining"]["epoch"]), losses, label=f"Loss"
+            )
+            ax_optim_g_sub.plot(
+                range(len(params_before)),
+                params_before,
+                label=f"G Before Optimization ",
+            )
+            ax_optim_g_sub.plot(
+                range(len(params_after_optim)),
+                params_after_optim,
+                label=f"G After Optimization",
+            )
+
+    def plot_params(self, params_list: list, ax: Axes) -> tuple:
+        """
+        Plot the G, eta, zeta, and gamma values for each run.
+
+        Parameters:
+        params_list (list): List of parameters from each run.
+        ax (matplotlib.axes.Axes): Axes for plotting.
+
+        Returns:
+        tuple: Tuple containing lists of G, eta, zeta, and gamma values.
+        """
+        num_runs = len(params_list)
+
+        Gs, etas, zetas, gammas = [], [], [], []
+        param_mappings = {"G": Gs, "eta": etas, "zeta": zetas, "gamma": gammas}
+
+        for _, params in enumerate(params_list):
+            for name, param in params:
+                if name in param_mappings:
+                    if name == "G":
+                        param_mappings[name].append(
+                            torch.sigmoid(param).data.cpu().numpy()
+                        )
+                    else:
+                        param_mappings[name].append(param.data.cpu().numpy())
+
+        ax.plot(range(num_runs), Gs, label=f"G")
+        parameters = {
+            "eta": np.array(etas).T,
+            "zeta": np.array(zetas).T,
+            "gamma": np.array(gammas).T,
+        }
+        for param_name, param_values in parameters.items():
+            for i in range(param_values.shape[0])[:2]:
+                ax.plot(range(num_runs), param_values[i], label=f"{param_name} {i+1}")
+
+        return Gs, etas, zetas, gammas
+
+    def setup_and_legend(
+        self,
+        fig,
+        xlabel: str,
+        ylabel: str,
+        title: str,
+        legend_loc: str = "upper right",
+        ncol: int = 2,
+    ) -> None:
+        """
+        Setup plot labels, title and legend.
+
+        Parameters:
+        fig (Figure or Axes): Matplotlib Figure or Axes object to setup.
+        xlabel (str): X-axis label.
+        ylabel (str): Y-axis label.
+        title (str): Title of the plot.
+        legend_loc (str, optional): Location of the legend. Defaults to "upper right".
+        ncol (int, optional): Number of columns in the legend. Defaults to 2.
+        """
+        handles, labels = [], []
+        if isinstance(fig, Figure):
+            fig.supxlabel(xlabel)
+            fig.supylabel(ylabel)
+            fig.suptitle(title)
+            for handle in fig.axes[0].get_lines():
+                handles.append(handle)
+                labels.append(handle.get_label())
+            fig.tight_layout()
+
+        elif isinstance(fig, Axes):
+            fig.set_xlabel(xlabel)
+            fig.set_ylabel(ylabel)
+            fig.set_title(title)
+            for handle in fig.get_lines():
+                handles.append(handle)
+                labels.append(handle.get_label())
+        fig.legend(handles, labels, loc=legend_loc, ncol=ncol)
+
+    def add_config_text(self, fig: Figure) -> None:
+        """
+        Add configuration text to the figure.
+
+        Parameters:
+        fig (Figure): The figure to add the text to.
+        """
+        config_text = ""
+        if config["inferenceMethod"] == "torch_autograd":
+            gd_params = config["modelTraining"]
+            config_text += "inferenceParams: "
+            for key, value in gd_params.items():
+                if key not in ["modelPath", "nSplits"]:
+                    config_text += f"  {key}: {value}\n"
+        fig.text(0.05, 0.1, config_text, fontsize=7, va="top", wrap=True)
+
+        original_g = config["modelTraining"]["originalG"]
+        config_text = ""
+        if config["inferenceMethod"] == "mcmc":
+            mcmc_params = config["inferenceParams"]["mcmc"]
+            config_text += "inferenceParams: "
+            for key, value in mcmc_params.items():
+                config_text += f"  {key}: {value}\n"
+
+        config_text += f"originalG: {original_g}"
+        fig.text(0.05, 0.05, config_text, fontsize=7, va="top", wrap=True)
+
+
+    def plot_metrics_singleprocess(self, losses: list, ax: Axes, num_run: int) -> None:
+        """
+        Plot training loss.
+
+        Parameters:
+        losses (list): List of losses.
+        ax (matplotlib.axes.Axes): Axes for plotting.
+        num_run (int): The current run number.
+        """
+        ax.plot(range(self.epoch), losses, "b-", label="Training loss")
+        ax.set_title(
+            f'Independent run {num_run} with G = {"{:.1f}".format(config["modelTraining"]["originalG"])}',
+        )
+
+    def training_plot_metrics(
+        self,
+        train_losses,
+        val_losses,
+        test_loss,
+        train_mse_list,
+        val_mse_list,
+        test_mse,
+    ) -> None:
+        """
+        Plot training and validation loss and accuracy, and test metrics.
+
+        Parameters:
+        train_losses (list): List of training losses.
+        val_losses (list): List of validation losses.
+        test_loss (float): Test loss.
+        train_mse_list (list): List of training accuracies.
+        val_mse_list (list): List of validation accuracies.
+        test_mse (float): Test MSE.
+        """
+        epochs = range(1, config["modelTraining"]["epoch"] + 1)
+
+        plt.figure(figsize=(14, 6))
+
+        # Plot losses
+        plt.subplot(1, 2, 1)
+        plt.plot(epochs, train_losses, "bo-", label="Training loss")
+        plt.plot(epochs, val_losses, "ro-", label="Validation loss")
+        # plt.axhline(y=test_loss, color='g', linestyle='-', label='Test loss')
+        plt.title("Training, Validation Loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.legend()
+
+        # Plot accuracies
+        plt.subplot(1, 2, 2)
+        plt.plot(epochs, train_mse_list, "bo-", label="Training MSE")
+        plt.plot(epochs, val_mse_list, "ro-", label="Validation MSE")
+        # plt.axhline(y=test_mse, color='g', linestyle='-', label='Test MSE')
+        plt.title("Training, Validation MSE")
+        plt.xlabel("Epoch")
+        plt.ylabel("MSE")
+        plt.legend()
+
+        plt.tight_layout()

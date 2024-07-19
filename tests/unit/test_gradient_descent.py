@@ -9,7 +9,7 @@ import pandas as pd
 # Add the project root to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.insert(0, project_root)
-from dynamic_linear_model.inference.gradient_descent import GradientDescentTorch, GradientDescentPerturbation
+from dynamic_linear_model.inference.gradient_descent import GradientDescentPerturbation
 
 
 @pytest.fixture
@@ -44,43 +44,6 @@ def mock_data():
     Y_t_normalized = scaler_Y.fit_transform(Y_t.reshape(-1, 1)).flatten()
     
     return X_t, Z_t, Y_t, Y_t_normalized, scaler_Y
-
-def test_gradient_descent_torch(mock_data):
-    X_t, Z_t, Y_t, Y_t_normalized, scaler_Y = mock_data
-
-    # Convert to PyTorch tensors
-    X_t = torch.tensor(X_t, dtype=torch.float32)
-    Z_t = torch.tensor(Z_t, dtype=torch.float32)
-    Y_t = torch.tensor(Y_t_normalized, dtype=torch.float32)
-
-    # Initial parameters with noise
-    original_eta = np.zeros(X_t.shape[1])
-    original_zeta = np.zeros(Z_t.shape[1])
-    initial_G = [0.7 + np.random.normal(0, 0.01)]
-    initial_eta = original_eta + np.random.normal(0, 0.01, size=original_eta.shape)
-    initial_zeta = original_zeta + np.random.normal(0, 0.01, size=original_zeta.shape)
-
-    initial_G_tensor = torch.tensor(initial_G, dtype=torch.float32, requires_grad=True)
-    initial_eta_tensor = torch.tensor(initial_eta, dtype=torch.float32, requires_grad=True)
-    initial_zeta_tensor = torch.tensor(initial_zeta, dtype=torch.float32, requires_grad=True)
-
-    initial_params = [nn.Parameter(initial_G_tensor), nn.Parameter(initial_eta_tensor), nn.Parameter(initial_zeta_tensor)]
-
-    # Initialize and optimize
-    gd_torch = GradientDescentTorch(learning_rate=0.001, n_iterations=500)
-    optimized_params = gd_torch.optimize(Y_t, X_t, Z_t, initial_params)
-
-    G = optimized_params[0].detach().numpy()
-    eta = optimized_params[1].detach().numpy()
-    zeta = optimized_params[2].detach().numpy()
-
-    print("Torch Optimized G:", G)
-    print("Torch Optimized eta:", eta)
-    print("Torch Optimized zeta:", zeta)
-
-    assert G is not None, "Optimized G is None"
-    assert eta is not None, "Optimized eta is None"
-    assert zeta is not None, "Optimized zeta is None"
 
 def test_gradient_descent_perturb(mock_data):
     X_t, Z_t, Y_t, Y_t_normalized, scaler_Y = mock_data

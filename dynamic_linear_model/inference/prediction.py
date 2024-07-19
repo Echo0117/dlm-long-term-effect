@@ -1,6 +1,5 @@
 from dynamic_linear_model.model import DynamicLinearModel
 from config import config
-from dynamic_linear_model.inference.samplying_method import MCMCSamplingMethod
 
 class SalesPrediction:
     def __init__(self):
@@ -23,9 +22,6 @@ class SalesPrediction:
         Returns:
         np.ndarray: Predicted values.
         """
-        # Optimize parameters
-        # G, eta, zeta = self.optimize_parameters()
-        # T = len(self.Y_t)
         # Use the DLM model to predict values
         predicted_Y = self.model.dlm_model(X_t, Z_t)
         return predicted_Y

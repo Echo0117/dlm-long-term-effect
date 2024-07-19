@@ -11,17 +11,17 @@
   },
   "inferenceMethod": "torch_autograd", 
   "modelTraining": {
-    "epoch": 50,
+    "epoch": 100,
     "learningRate": 1e-4,
-    "originalG":0.7,
+    "originalG": 0.7,
     "addSigmoid": true,
     "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl",
     "nSplits": 5,
-    "theta0": 0,
     "addWeight": 1
   },
   "simulationRecovery":{
     "independentRun": 2,
+    "ListG": [0.1, 0.9],
     "paramsSavedPath": "simulated_parameters_4.csv",
     "simulatedParamSavedPath": "temp_simulated.csv"
   },
@@ -33,6 +33,5 @@
       "numStepsBetweenSamples": 50,
       "perturbationNoise": 0.0001
     }
-
   }
 }
