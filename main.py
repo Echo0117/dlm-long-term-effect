@@ -1,4 +1,5 @@
 import logging
+from loguru import logger
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
@@ -31,20 +32,21 @@ def simulation_recovery(X_t, Z_t, Y_t):
     )
 
     G_list = config["simulationRecovery"]["ListG"]
-
+    num_runs = config["simulationRecovery"]["independentRun"]
     fig, axs = plt.subplots(len(G_list), 2, figsize=(16, 8))
     fig_optim_g, axs_optim_g = plt.subplots(
-        len(G_list), config["simulationRecovery"]["independentRun"], figsize=(16, 8)
+        len(G_list), num_runs, figsize=(16, 8)
     )
     fig_training, axs_training = plt.subplots(
-        len(G_list), config["simulationRecovery"]["independentRun"], figsize=(16, 8)
+        len(G_list), num_runs, figsize=(16, 8)
     )
+
     # Ensure axs, axs_optim_g, and axs_training are 2D arrays if G_list has more than one element
     if len(G_list) == 1:
         axs = [axs]
         axs_optim_g = [axs_optim_g]
         axs_training = [axs_training]
-        
+
     plotter = Plotter()
     for G, ax, ax_training, ax_optim_g in zip(G_list, axs, axs_training, axs_optim_g):
         config["modelTraining"]["originalG"] = G
@@ -100,7 +102,7 @@ if __name__ == "__main__":
     start = time.time()
     simulation_recovery(X_t, Z_t, Y_t)
     end = time.time()
-    print("time", end - start)
+    logger.info(f"total running time: {end - start}")
 
     plt.tight_layout()
     plt.show()

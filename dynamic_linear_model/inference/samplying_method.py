@@ -86,7 +86,6 @@ class MCMCSamplingMethod(SamplingMethod):
         samples = self.sample(initial_state, Y_t, X_t, Z_t)
         mean_params = np.mean(samples, axis=0)
 
-        print("mean_params", mean_params)
         G, *coeffs = mean_params
         eta = np.array(coeffs[:X_t.shape[1]])
         zeta = np.array(coeffs[X_t.shape[1]:])

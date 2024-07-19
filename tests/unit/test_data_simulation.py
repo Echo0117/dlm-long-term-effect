@@ -103,8 +103,7 @@ def test_data_simulation_df_germany():
 
     # Initialize DataSimulation
     data_simulation = DataSimulation(X_t, Z_t, Y_t, G=0.7)
-    print("data_simulation.eta", data_simulation.eta)
-    print("data_simulation.Zeta", data_simulation.zeta)
+
     # Test obtain_parameters_by_lr
     data_simulation._obtain_initial_parameters_by_lr()
     assert [round(f, 4) for f in data_simulation.eta.data.tolist()] == [0.5652, 0.4609, -0.0409, 0.0895, 0.0421, 0.0573, 0.0152], "eta is not correct"

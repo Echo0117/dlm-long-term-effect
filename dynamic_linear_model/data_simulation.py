@@ -5,6 +5,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from loguru import logger
 from matplotlib.axes import Axes
 from sklearn.linear_model import LinearRegression
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -31,7 +32,6 @@ class SimulationRecovery:
         self.Z_t = torch.tensor(Z_t, dtype=torch.float32, device=device)
         self.Y_t = torch.tensor(Y_t, dtype=torch.float32, device=device)
         self.epoch = config["modelTraining"]["epoch"]
-        self.n_splits = config["modelTraining"]["nSplits"]
         self.model = DynamicLinearModel().to(device)
 
     def run_optimization(self, num_run: int) -> tuple:
@@ -45,7 +45,7 @@ class SimulationRecovery:
         tuple: A tuple containing model parameters, predicted Y, optimization metrics, and final loss.
         """
 
-        print("independentRun: ", num_run)
+        logger.info(f"independentRun: {num_run}")
         self.model = DynamicLinearModel().to(device)
         try:
             params_before, params_after_optim, losses = self._optimize(

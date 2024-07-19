@@ -44,8 +44,6 @@ def test_data_preprocessing(mock_data):
     data_processor = DataPreprocessing(file_path, brand, dependent_variable, independent_variables_X, independent_variables_Z)
     X_t, Z_t, Y_t = data_processor.preprocess(normalization=True)
 
-    print(X_t.shape)
-
     assert X_t.shape == (6, 7), "X_t shape mismatch"
     assert Z_t.shape == (6, 2), "Z_t shape mismatch"
     assert Y_t.shape == (6,), "Y_t shape mismatch"
@@ -63,7 +61,7 @@ def test_data_median_normalization():
     values = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 31419.98, 43892.66, 52123.99, 43481.99])
     scaler = AbsoluteMedianScaler()
     normalized_values = scaler.fit_transform(values)
-    print("normalized_values")
+
     assert normalized_values == [1]
 
 

@@ -1,5 +1,6 @@
 import logging
 import os
+from loguru import logger
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
@@ -25,12 +26,12 @@ def delete_existing_files(file_path, file_simulated_path):
     """
     if os.path.exists(file_path):
         os.remove(file_path)
-        print(f"File {file_path} has been deleted successfully.")
+        logger.info(f"File {file_path} has been deleted successfully.")
     elif os.path.exists(file_simulated_path):
         os.remove(file_simulated_path)
-        print(f"File {file_simulated_path} has been deleted successfully.")
+        logger.info(f"File {file_simulated_path} has been deleted successfully.")
     else:
-        print(f"Files {file_path} and {file_simulated_path} do not exist.")
+        logger.info(f"Files {file_path} and {file_simulated_path} do not exist.")
 
 
 def log_parameters_results(
@@ -141,9 +142,10 @@ def calculate_statistics(
     new_df = pd.concat([empty_row, new_df], ignore_index=True)
 
     # Save to CSV
-    new_df.to_csv(config["simulationRecovery"]["paramsSavedPath"], index=False)
+    saved_file_path = config["simulationRecovery"]["paramsSavedPath"]
+    new_df.to_csv(saved_file_path, index=False)
 
-    print("Simulation results saved to simulation_results.csv")
+    logger.info(f"Simulation results saved to {saved_file_path}")
 
 
 class Plotter:
@@ -192,9 +194,9 @@ class Plotter:
         start_epoch = 10
 
         # Ensure ax_training and ax_optim_g are lists of axes
-        if not isinstance(ax_training, list):
+        if isinstance(ax_training, Axes):
             ax_training = [ax_training]
-        if not isinstance(ax_optim_g, list):
+        if isinstance(ax_optim_g, Axes):
             ax_optim_g = [ax_optim_g]
 
         for (

@@ -65,10 +65,6 @@ def test_gradient_descent_perturb(mock_data):
     eta = np.array(coeffs[:X_t.shape[1]])
     zeta = np.array(coeffs[X_t.shape[1]:])
 
-    print("Perturb Optimized G:", G)
-    print("Perturb Optimized eta:", eta)
-    print("Perturb Optimized zeta:", zeta)
-
     assert G is not None, "Optimized G is None"
     assert eta is not None, "Optimized eta is None"
     assert zeta is not None, "Optimized zeta is None"
