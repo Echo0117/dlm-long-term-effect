@@ -1,6 +1,6 @@
 {
   "dataset": {
-    "path": "/Users/pr059704/Downloads/df_germany.csv",
+    "path": "dataset/input_data/df_germany.csv",
     "brand": "absolut",
     "dependent_variable": "volume_so_off",
     "independent_variables_X": ["january", "february", "march", "april", "may", "june",
@@ -11,19 +11,20 @@
   },
   "inferenceMethod": "torch_autograd", 
   "modelTraining": {
-    "epoch": 1000,
-    "learningRate": 1e-4,
-    "momentum": 0.7,
-    "weightDecay": 1e-4,
+    "epoch": 300,
+    "learningRate": 0.000197583,
+    "momentum": 0.635068,
+    "weightDecay": 1.84818e-05,
     "originalG": 0.0, // originalG is an initialization for plotting, no need to change.
     "addSigmoid": true,
     "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl"
   },
   "simulationRecovery":{
-    "independentRun": 1,
-    "ListG": [0.1, 0.6, 0.9],
-    "paramsSavedPath": "simulated_parameters_4.csv",
-    "simulatedParamSavedPath": "temp_simulated.csv"
+    "independentRun": 2,
+    "independentRunList": [2, 5, 10, 20, 50],
+    "ListG": [0.1, 0.6, 0.7, 0.9],
+    "paramsSavedPath": "dataset/generated_results/simulated_parameters_4.csv",
+    "simulatedParamSavedPath": "dataset/generated_results/temp_simulated.csv"
   },
   "inferenceParams":{
     "mcmc":{

@@ -1,12 +1,12 @@
+import glob
 import logging
 import os
 from loguru import logger
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from config import config
 
@@ -14,7 +14,6 @@ from config import config
 def convert_normalized_data(scaler, data):
     convert_data = scaler.inverse_transform(data.reshape(-1, 1)).flatten()
     return convert_data
-
 
 def delete_existing_files(file_path, file_simulated_path):
     """
@@ -146,6 +145,34 @@ def calculate_statistics(
     new_df.to_csv(saved_file_path, index=False)
 
     logger.info(f"Simulation results saved to {saved_file_path}")
+
+
+def generate_combined_simulated_params(directory):
+    # Find all files with the prefix 'simulated_parameters_'
+    files = glob.glob(f'{directory}/simulated_parameters_*.csv')
+
+    data_dict = {}
+
+    # Extract the relevant columns from each file
+    for idx, file in enumerate(files):
+        df = pd.read_csv(file)
+        postfix = file.split('_')[-1].split('.')[0]  # Extract the postfix (e.g., '2' from 'simulated_parameters_2.csv')
+        column_name = f'independent run {postfix}'
+        data_dict[column_name] = df[['Best Loss', 'Mean', 'Std']]
+
+        if idx == 0:
+            simulated_column = df['Simulated']
+
+    combined_df = pd.concat(data_dict, axis=1)
+
+    # Flatten the MultiIndex in columns
+    combined_df.columns = [f'{col[1]} ({col[0]})' for col in combined_df.columns]
+
+    combined_df.insert(0, 'Parameter', df['Param'])
+    combined_df.insert(1, 'Simulated', simulated_column)
+
+    output_file = f'{directory}/combined_simulated_parameters.csv'
+    combined_df.to_csv(output_file, index=False)
 
 
 class Plotter:

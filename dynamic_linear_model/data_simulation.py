@@ -11,6 +11,7 @@ from sklearn.linear_model import LinearRegression
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from config import config
+from dynamic_linear_model.losses import mse_loss
 from dynamic_linear_model.model import DynamicLinearModel
 import dynamic_linear_model.utils as utils
 
@@ -34,7 +35,52 @@ class SimulationRecovery:
         self.epoch = config["modelTraining"]["epoch"]
         self.model = DynamicLinearModel().to(device)
 
-    def run_optimization(self, num_run: int) -> tuple:
+    def recovery_for_simulation(
+        self, ax: Axes, ax_training: Axes, ax_optim_g: Axes
+    ) -> np.ndarray:
+        """
+        Train the model for multiple iterations and record statistics of parameters.
+
+        Parameters:
+        ax (matplotlib.axes.Axes): Axes for plotting parameter statistics.
+        ax_training (matplotlib.axes.Axes): Axes for plotting training metrics.
+        ax_optim_g (matplotlib.axes.Axes): Axes for plotting optimization metrics.
+
+        Returns:
+        np.ndarray: The best predicted Y values.
+        """
+        num_runs = config["simulationRecovery"]["independentRun"]
+        params_list, metrics_list = [], []
+        best_Y_predicted = None
+        best_final_loss = float("inf")
+        plotter = utils.Plotter()
+
+        with ProcessPoolExecutor() as executor:
+            futures = [
+                executor.submit(self._run_optimization, num_run)
+                for num_run in range(num_runs)
+            ]
+
+            for future in as_completed(futures):
+                params, Y_predicted, metrics, final_loss = future.result()
+                if params is not None and Y_predicted is not None:
+                    params_list.append(params)
+                    metrics_list.append(metrics)
+                    if final_loss < best_final_loss:
+                        best_final_loss = final_loss
+                        best_Y_predicted = Y_predicted
+                        best_run_number = futures.index(future)
+
+        # Plot metrics after multiprocessing
+        plotter.plot_metrics_multiprocess(metrics_list, ax_training, ax_optim_g)
+
+        # Calculate statistics
+        Gs, etas, zetas, gammas = plotter.plot_params(params_list, ax)
+        utils.calculate_statistics(Gs, etas, zetas, gammas, best_run_number)
+
+        return best_Y_predicted
+    
+    def _run_optimization(self, num_run: int) -> tuple:
         """
         Run the optimization for a single independent run.
 
@@ -66,64 +112,6 @@ class SimulationRecovery:
             final_loss,
         )
 
-    def recovery_for_simulation(
-        self, ax: Axes, ax_training: Axes, ax_optim_g: Axes
-    ) -> np.ndarray:
-        """
-        Train the model for multiple iterations and record statistics of parameters.
-
-        Parameters:
-        ax (matplotlib.axes.Axes): Axes for plotting parameter statistics.
-        ax_training (matplotlib.axes.Axes): Axes for plotting training metrics.
-        ax_optim_g (matplotlib.axes.Axes): Axes for plotting optimization metrics.
-
-        Returns:
-        np.ndarray: The best predicted Y values.
-        """
-        num_runs = config["simulationRecovery"]["independentRun"]
-        params_list, metrics_list = [], []
-        best_Y_predicted = None
-        best_final_loss = float("inf")
-        plotter = utils.Plotter()
-
-        with ProcessPoolExecutor() as executor:
-            futures = [
-                executor.submit(self.run_optimization, num_run)
-                for num_run in range(num_runs)
-            ]
-
-            for future in as_completed(futures):
-                params, Y_predicted, metrics, final_loss = future.result()
-                if params is not None and Y_predicted is not None:
-                    params_list.append(params)
-                    metrics_list.append(metrics)
-                    if final_loss < best_final_loss:
-                        best_final_loss = final_loss
-                        best_Y_predicted = Y_predicted
-                        best_run_number = futures.index(future)
-
-        # Plot metrics after multiprocessing
-        plotter.plot_metrics_multiprocess(metrics_list, ax_training, ax_optim_g)
-
-        # Calculate statistics
-        Gs, etas, zetas, gammas = plotter.plot_params(params_list, ax)
-        utils.calculate_statistics(Gs, etas, zetas, gammas, best_run_number)
-
-        return best_Y_predicted
- 
-    def mse_loss(self, predicted_Y: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
-        """
-        Define the Mean Squared Error (MSE) loss function.
-
-        Parameters:
-        predicted_Y (torch.Tensor): Predicted Y values.
-        Y (torch.Tensor): Actual Y values.
-
-        Returns:
-        torch.Tensor: The MSE loss.
-        """
-        return 0.5 * torch.mean((predicted_Y - Y) ** 2)
-
     def _optimize(
         self, Y_t: torch.Tensor, X_t: torch.Tensor, Z_t: torch.Tensor
     ) -> tuple:
@@ -152,7 +140,7 @@ class SimulationRecovery:
 
             optimizer.zero_grad()
             outputs, G, _, _, _ = self.model.forward(X_t, Z_t)
-            loss = self.mse_loss(outputs, Y_t)
+            loss = mse_loss(outputs, Y_t)
             loss.backward()
             optimizer.step()
 
@@ -276,5 +264,5 @@ class DataSimulation:
             torch.tensor(eta_zeta[self.X_t.shape[1] :], device=device)
         )
         # during simulation, we take gamma=zeta
-        # self.gamma = self.zeta
-        self.gamma = nn.Parameter(torch.randn(config["dataset"]["zDim"], device=device))
+        self.gamma = self.zeta
+        # self.gamma = nn.Parameter(torch.randn(config["dataset"]["zDim"], device=device))
