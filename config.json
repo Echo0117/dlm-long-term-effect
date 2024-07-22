@@ -1,0 +1,40 @@
+{
+  "dataset": {
+    "path": "dataset/input_data/df_germany.csv",
+    "brand": "absolut",
+    "dependent_variable": "volume_so_off",
+    "independent_variables_X": ["january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"],
+    "independent_variables_Z": ["relative_gap_to_90th_price_off_off", "off_trade_visibility_off", "digital_off", "digital_social_media_off","out_of_home_off",
+    "television_off", "brand_experience_off", "distribution_off_off", "discount_price_comp_to_pr_off_off"],
+    "isNormalizeX": false
+  },
+  "inferenceMethod": "torch_autograd", 
+  "modelTraining": {
+    "epoch": 300,
+    "learningRate": 0.000197583,
+    "momentum": 0.635068,
+    "weightDecay": 1.84818e-05,
+    "originalG": 0.0, 
+    "addSigmoid": true,
+    "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl"
+  },
+  "simulationRecovery":{
+    "independentRun": 2,
+    "independentRunList": [2, 5, 10, 20, 50],
+    "ListG": [0.1, 0.6, 0.9],
+    "paramsSavedPath": "dataset/generated_results/simulated_parameters.csv",
+    "simulatedParamSavedPath": "dataset/generated_results/temp_simulated.csv",
+    "isGammaEqualZeta": false
+  },
+  "inferenceParams":{
+    "mcmc":{
+      "nWalkers": 32,
+      "numSamples": 1000,
+      "burnInSteps": 100,
+      "numStepsBetweenSamples": 50,
+      "perturbationNoise": 0.0001
+    }
+  },
+  "device": "cpu"
+}
