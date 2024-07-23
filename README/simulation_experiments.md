@@ -18,6 +18,7 @@ $$
 $$
 
 For now, we took these values for simplifying the reproduction
+
 $$
 F_t = 1, v_t = 0, \omega_t = 0
 $$
@@ -89,7 +90,9 @@ Modify the `config.json` file to set the appropriate paths and parameters. This 
 
 ### Project Configuration
 
-This document provides an overview of the configuration settings used for the machine learning project.
+Youcan modify the `config.json`
+
+Then `config.py` will read the json file
 
 #### dataset Configuration
 
@@ -108,13 +111,13 @@ This section specifies the dataset and relevant variables used in the project.
   - List of marketing independent variables (interested variables):
     - `relative_gap_to_90th_price_off_off`, `off_trade_visibility_off`, `digital_off`, `digital_social_media_off`, `out_of_home_off`, `television_off`, `brand_experience_off`, `distribution_off_off`, `discount_price_comp_to_pr_off_off`
 - **isNormalizeX:** `false`
-  - Indicates whether the independent variables X should be normalized.
+  - Indicates whether the independent variables X should be normalized. (Now we are not normalizing it, because it's one-hot of months as Independent Variables X)
 
 #### Inference Method
 
 - **Inference Method:** `torch_autograd`
   - Specifies the method used for inference, utilizing PyTorch's autograd for automatic differentiation.
-  (right now only this method is working)
+  (right now only this method is working, no need to change.)
 
 #### Model Training Configuration
 
@@ -180,23 +183,23 @@ This section contains parameters for the inference process using Markov Chain Mo
 
 There are two methods in the `main.py` so far, 
 
-- 1. ```simulation_recovery()```: run the simulation recovery with independent run based on the config["simulationRecovery"]["independentRun"] to see the plot.
+- 1. ```simulation_recovery()```: run the simulation recovery with independent run based on the `config["simulationRecovery"]["independentRun"]` to see the plot.
 
 - 2. ```simulation_recovery_with_multi_independent_runs()```:
-it's a parallelly run of the above #1 simulation recovery with a list of independent runs, based on the config["simulationRecovery"]["independentRunList"] to see the parameters table.
+it's a parallelly run of the above #1 simulation recovery with a list of independent runs, based on the `config["simulationRecovery"]["independentRunList"]` to see the parameters table.
 
 
 # Results Explanation
 ## For Experiment 1:
 
 
-With "independentRun" = 4 and "ListG" = [0.1, 0.6, 0.9], "isGammaEqualZeta" = false in `config.json` 
+With `"independentRun" = 4` and `"ListG" = [0.1, 0.6, 0.9]`, `"isGammaEqualZeta" = false` in `config.json` 
 
  we can get following 4 Figures:
 
  Figure 1. Change of Loss during Rocovery
 
- - there are 4 column ("independentRun" = 4), 3 rows (len(ListG) = 3)
+ - there are 4 column (`"independentRun"` = 4), 3 rows (`len(ListG)` = 3)
 
  - 12 subfigures, each subfigure is one completed training with different G and different independent run
  - X axis is epoch, Y axis is loss (mse)
@@ -207,7 +210,7 @@ With "independentRun" = 4 and "ListG" = [0.1, 0.6, 0.9], "isGammaEqualZeta" = fa
 
  Figure 2. Change of G value during Optimizing
 
- - there are 4 column ("independentRun" = 4), 3 rows (len(ListG) = 3)
+ - there are 4 column (`"independentRun" = 4`), 3 rows (`len(ListG) = 3`)
 
  - 12 subfigures, each subfigure is one completed training with different G and different independent run as following
 
@@ -217,7 +220,7 @@ With "independentRun" = 4 and "ListG" = [0.1, 0.6, 0.9], "isGammaEqualZeta" = fa
 
  Figure 3. Simulated vs Predicted 
 
- - there are 1 column (we took the best results over all independent runs), 3 rows (len(ListG) = 3)
+ - there are 1 column (we took the best results over all independent runs), 3 rows (`len(ListG) = 3`)
 
  - 3 subfigures, each subfigure is one completed simulation with different G
 
@@ -229,7 +232,7 @@ With "independentRun" = 4 and "ListG" = [0.1, 0.6, 0.9], "isGammaEqualZeta" = fa
 
  Figure 4. Change of parameters with different runs
 
- - there are 1 column, 3 rows (len(ListG) = 3)
+ - there are 1 column, 3 rows (`len(ListG) = 3`)
 
  - 3 subfigures, each subfigure is 4 completed independent runs with different G
 
@@ -258,8 +261,9 @@ with two tables: `independent_gamma_zeta`, and `gamma_equal_zeta`
 
 ## 1. we start from `main.py`
 
-simulation_recovery()
-simulation_recovery_with_multi_independent_runs()
+`simulation_recovery()`
+
+`simulation_recovery_with_multi_independent_runs()`
 
 ## 2. Then it calls the experiments folder for `simulation_experiment.py`
 
@@ -337,6 +341,7 @@ $$
 $$
 
 For now, we took these values for simplifying the reproduction
+
 $$
 F_t = 1, v_t = 0, \omega_t = 0
 $$
