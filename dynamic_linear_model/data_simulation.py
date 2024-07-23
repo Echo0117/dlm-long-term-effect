@@ -150,8 +150,8 @@ class SimulationRecovery:
             if epoch % 100 == 0:
                 logging.info(f"epoch {epoch}: Loss = {loss.item()}")
 
-        for i, param in enumerate(self.model.parameters()):
-            logging.info(f"Paramssss {i}: {param.data}")
+        for name, param in self.model.named_parameters():
+            logging.info(f"Params {name}: {param.data}")
 
         return params_before, params_after_optim, losses
 
