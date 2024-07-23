@@ -201,7 +201,7 @@ With "independentRun" = 4 and "ListG" = [0.1, 0.6, 0.9], "isGammaEqualZeta" = fa
  - 12 subfigures, each subfigure is one completed training with different G and different independent run
  - X axis is epoch, Y axis is loss (mse)
 
-![alt text](README/images/loss.png)
+![alt text](images/loss.png)
 
 
 
@@ -213,7 +213,7 @@ With "independentRun" = 4 and "ListG" = [0.1, 0.6, 0.9], "isGammaEqualZeta" = fa
 
  - X axis is epoch, Y axis is G value before applying optimizer (SGD) and after applying (added sigmoid function) on each epoch.
 
-![alt text](README/images/value_g.png)
+![alt text](images/value_g.png)
 
  Figure 3. Simulated vs Predicted 
 
@@ -223,7 +223,7 @@ With "independentRun" = 4 and "ListG" = [0.1, 0.6, 0.9], "isGammaEqualZeta" = fa
 
  - X axis is number of samples, Y axis is Sales Volumn of simulated values and predicted values
 
- <img src="README/images/simulations.png" alt="simulations" width="500"/>
+ <img src="images/simulations.png" alt="simulations" width="500"/>
 
 
 
@@ -237,7 +237,7 @@ With "independentRun" = 4 and "ListG" = [0.1, 0.6, 0.9], "isGammaEqualZeta" = fa
 
  - bottom left corner has the parameters that have been used during the recovery (format is a bit ugly now, should be changed)
 
-<img src="README/images/parameters.png" alt="Parameters" width="500"/>
+<img src="images/parameters.png" alt="Parameters" width="500"/>
 
 
 ## Experiment 2
