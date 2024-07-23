@@ -40,6 +40,7 @@ def simulation_recovery(X_t, Z_t, Y_t, plot_result=True):
     plotter = Plotter()
     for G, ax, ax_training, ax_optim_g in zip(G_list, axs, axs_training, axs_optim_g):
         config["modelTraining"]["originalG"] = G
+        logger.info(f"Running on G = {G}")
 
         data_simulation = DataSimulation(X_t, Z_t, Y_t, G)
         simulated_results = data_simulation.get_simulation_results()

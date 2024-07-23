@@ -9,11 +9,13 @@ from loguru import logger
 from matplotlib.axes import Axes
 from sklearn.linear_model import LinearRegression
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from tqdm import tqdm
 
 from config import config
 from dynamic_linear_model.losses import mse_loss
 from dynamic_linear_model.model import DynamicLinearModel
 import dynamic_linear_model.utils as utils
+
 
 
 device = config["device"]
@@ -135,7 +137,7 @@ class SimulationRecovery:
 
         losses, params_before, params_after_optim = [], [], []
         self.model.train()
-        for epoch in range(self.epoch):
+        for epoch in tqdm(range(self.epoch), desc="Epochs"):
             params_before.append(self.model.G.item())
 
             optimizer.zero_grad()
