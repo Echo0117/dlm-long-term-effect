@@ -89,11 +89,12 @@ class SimulationRecovery:
         outputs_list, losses_list, params_before, params_after_optim = [], [], [], []
 
         for epoch in tqdm(range(self.epoch), desc="Epochs"):
-
-            params_before_epoch = [param.data.cpu().numpy() for param in self.model.G]
-
+            
+            
             optimizer.zero_grad()
-            outputs, _, _, _, _ = self.model.forward(X_t, Z_t)
+            outputs, G_hat, _, _, _ = self.model.forward(X_t, Z_t)
+            # params_before_epoch = [param.clone().data for param in self.model.G]
+            params_before_epoch = G_hat.data
             batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
 
             # Backward each loss separately
@@ -101,14 +102,14 @@ class SimulationRecovery:
                 loss.backward(retain_graph=True)
             optimizer.step()
 
-            params_after_epoch = [param.data.cpu().numpy() for param in self.model.G]
+            params_after_epoch = [torch.sigmoid(param.clone().data) for param in self.model.G]
 
             params_before.append(params_before_epoch)
-
             params_after_optim.append(params_after_epoch)
             losses_list.append(batch_losses.data.cpu().numpy())
             outputs_list.append(outputs.data.cpu().numpy())
 
+            
             if epoch % 100 == 0:
                 logging.info(
                     f"epoch {epoch}: Total mean Loss = {batch_losses.mean().item()}"

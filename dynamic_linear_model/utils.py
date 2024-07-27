@@ -196,8 +196,6 @@ class Plotter:
         """
         ax.plot(data_1, "b-", label=label1)
         ax.plot(data_2, "r--", label=label2)
-        print("data_1", data_1)
-        print("data_2", data_2)
         original_g = config["modelTraining"]["originalG"]
         config_text = ""
         if config["inferenceMethod"] == "mcmc":
