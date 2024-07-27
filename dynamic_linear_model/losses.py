@@ -12,4 +12,4 @@ def mse_loss(predicted_Y: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
     Returns:
     torch.Tensor: The MSE loss.
     """
-    return 0.5 * torch.mean((predicted_Y - Y) ** 2)
+    return 0.5 * torch.mean((predicted_Y - Y) ** 2, dim=1)

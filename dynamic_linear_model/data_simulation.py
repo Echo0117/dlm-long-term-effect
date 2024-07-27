@@ -1,5 +1,7 @@
 import logging
 import os
+import pdb
+import time
 import numpy as np
 import pandas as pd
 import torch
@@ -10,167 +12,144 @@ from matplotlib.axes import Axes
 from sklearn.linear_model import LinearRegression
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
-
+import torch.multiprocessing as mp
+import ipdb
 from config import config
 from dynamic_linear_model.losses import mse_loss
 from dynamic_linear_model.model import DynamicLinearModel
 import dynamic_linear_model.utils as utils
 
 
+device = config["device"]
+
+from config import config
+from dynamic_linear_model.losses import mse_loss
+from dynamic_linear_model.model import DynamicLinearModel
+import dynamic_linear_model.utils as utils
+import numpy as np
+import torch
+import torch.optim as optim
+from tqdm import tqdm
+import logging
+from matplotlib.axes import Axes
 
 device = config["device"]
 
 
 class SimulationRecovery:
     def __init__(self, X_t: np.ndarray, Z_t: np.ndarray, Y_t: np.ndarray):
-        """
-        Initialize the SimulationRecovery class with the given parameters.
-
-        Parameters:
-        X_t (np.ndarray): Independent variables matrix X.
-        Z_t (np.ndarray): Independent variables matrix Z.
-        Y_t (np.ndarray): Dependent variable vector Y.
-        """
         self.X_t = torch.tensor(X_t, dtype=torch.float32, device=device)
         self.Z_t = torch.tensor(Z_t, dtype=torch.float32, device=device)
         self.Y_t = torch.tensor(Y_t, dtype=torch.float32, device=device)
         self.epoch = config["modelTraining"]["epoch"]
-        self.model = DynamicLinearModel().to(device)
+        self.num_runs = config["simulationRecovery"]["independentRun"]
+
+        # Initialize the model with parameters for all runs
+        self.model = DynamicLinearModel(self.num_runs).to(device)
 
     def recovery_for_simulation(
         self, ax: Axes, ax_training: Axes, ax_optim_g: Axes
     ) -> np.ndarray:
-        """
-        Train the model for multiple iterations and record statistics of parameters.
 
-        Parameters:
-        ax (matplotlib.axes.Axes): Axes for plotting parameter statistics.
-        ax_training (matplotlib.axes.Axes): Axes for plotting training metrics.
-        ax_optim_g (matplotlib.axes.Axes): Axes for plotting optimization metrics.
-
-        Returns:
-        np.ndarray: The best predicted Y values.
-        """
-        num_runs = config["simulationRecovery"]["independentRun"]
-        params_list, metrics_list = [], []
-        best_Y_predicted = None
-        best_final_loss = float("inf")
         plotter = utils.Plotter()
 
-        with ProcessPoolExecutor() as executor:
-            futures = [
-                executor.submit(self._run_optimization, num_run)
-                for num_run in range(num_runs)
-            ]
+        (
+            named_parameters,
+            params_before,
+            params_after_optim,
+            losses,
+            best_epoch,
+            best_loss_run_index,
+            best_loss,
+            best_predicted_Y,
+        ) = self._optimize(self.Y_t, self.X_t, self.Z_t)
 
-            for future in as_completed(futures):
-                params, Y_predicted, metrics, final_loss = future.result()
-                if params is not None and Y_predicted is not None:
-                    params_list.append(params)
-                    metrics_list.append(metrics)
-                    if final_loss < best_final_loss:
-                        best_final_loss = final_loss
-                        best_Y_predicted = Y_predicted
-                        best_run_number = futures.index(future)
-
-        # Plot metrics after multiprocessing
+        logger.info(
+            f"best final loss: {best_loss}, best final loss is at epoch: {best_epoch}, the index of best run: {best_loss_run_index}"
+        )
+        metrics_list = (params_before, params_after_optim, losses)
         plotter.plot_metrics_multiprocess(metrics_list, ax_training, ax_optim_g)
 
-        # Calculate statistics
-        Gs, etas, zetas, gammas = plotter.plot_params(params_list, ax)
-        utils.calculate_statistics(Gs, etas, zetas, gammas, best_run_number)
+        print("named_parameters", named_parameters)
+        recovered_parameters = plotter.plot_params(named_parameters, ax)
+        utils.calculate_statistics(recovered_parameters, best_loss_run_index)
 
-        return best_Y_predicted
-    
-    def _run_optimization(self, num_run: int) -> tuple:
-        """
-        Run the optimization for a single independent run.
-
-        Parameters:
-        num_run (int): The current run number.
-
-        Returns:
-        tuple: A tuple containing model parameters, predicted Y, optimization metrics, and final loss.
-        """
-
-        logger.info(f"independentRun: {num_run}")
-        self.model = DynamicLinearModel().to(device)
-        try:
-            params_before, params_after_optim, losses = self._optimize(
-                self.Y_t,
-                self.X_t,
-                self.Z_t,
-            )
-        except UnboundLocalError as e:
-            logging.error(e)
-            return None, None
-
-        Y_predicted = self._get_predicted_Y(self.X_t, self.Z_t)
-        final_loss = losses[-1]
-        return (
-            list(self.model.named_parameters()),
-            Y_predicted.data.cpu().numpy(),
-            (params_before, params_after_optim, losses),
-            final_loss,
-        )
+        return best_predicted_Y
 
     def _optimize(
         self, Y_t: torch.Tensor, X_t: torch.Tensor, Z_t: torch.Tensor
     ) -> tuple:
-        """
-        Train the Dynamic Linear Model.
-
-        Parameters:
-        Y_t (torch.Tensor): Dependent variable vector Y.
-        X_t (torch.Tensor): Independent variables matrix X.
-        Z_t (torch.Tensor): Independent variables matrix Z.
-
-        Returns:
-        tuple: A tuple containing parameters before and after optimization and the list of losses.
-        """
         optimizer = optim.SGD(
             self.model.parameters(),
             lr=config["modelTraining"]["learningRate"],
             momentum=config["modelTraining"]["momentum"],
-            weight_decay=config["modelTraining"]["weightDecay"]
+            weight_decay=config["modelTraining"]["weightDecay"],
         )
 
-        losses, params_before, params_after_optim = [], [], []
-        self.model.train()
+        outputs_list, losses_list, params_before, params_after_optim = [], [], [], []
+
         for epoch in tqdm(range(self.epoch), desc="Epochs"):
-            params_before.append(self.model.G.item())
+
+            params_before_epoch = [param.data.cpu().numpy() for param in self.model.G]
 
             optimizer.zero_grad()
-            outputs, G, _, _, _ = self.model.forward(X_t, Z_t)
-            loss = mse_loss(outputs, Y_t)
-            loss.backward()
+            outputs, _, _, _, _ = self.model.forward(X_t, Z_t)
+            batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
+
+            # Backward each loss separately
+            for loss in batch_losses:
+                loss.backward(retain_graph=True)
             optimizer.step()
 
-            params_after_optim.append(G)
-            losses.append(loss.item())
+            params_after_epoch = [param.data.cpu().numpy() for param in self.model.G]
+
+            params_before.append(params_before_epoch)
+
+            params_after_optim.append(params_after_epoch)
+            losses_list.append(batch_losses.data.cpu().numpy())
+            outputs_list.append(outputs.data.cpu().numpy())
 
             if epoch % 100 == 0:
-                logging.info(f"epoch {epoch}: Loss = {loss.item()}")
+                logging.info(
+                    f"epoch {epoch}: Total mean Loss = {batch_losses.mean().item()}"
+                )
 
         for name, param in self.model.named_parameters():
             logging.info(f"Params {name}: {param.data}")
 
-        return params_before, params_after_optim, losses
+        # ipdb.set_trace()
+
+        params_before_np = np.array(params_before)
+        params_after_optim_np = np.array(params_after_optim)
+        losses_np = np.array(losses_list)
+        outputs_np = np.array(outputs_list)
+
+        print("params_before_np", params_before_np)
+        print("params_after_optim_np", params_after_optim_np)
+        # Find the index of the index of best performance
+        min_index_1d = np.argmin(losses_np)
+        min_index_2d = np.unravel_index(min_index_1d, losses_np.shape)
+
+        best_epoch = min_index_2d[0]
+        best_loss_run_index = min_index_2d[1]
+        best_loss = losses_np[min_index_2d]
+        best_predicted_Y = outputs_np[min_index_2d]
+
+        return (
+            self.model.named_parameters(),
+            params_before_np.T,
+            params_after_optim_np.T,
+            losses_np.T,
+            best_epoch,
+            best_loss_run_index,
+            best_loss,
+            best_predicted_Y,
+        )
 
     def _get_predicted_Y(self, X: torch.Tensor, Z: torch.Tensor) -> torch.Tensor:
-        """
-        Evaluate the model on the given data.
-
-        Parameters:
-        X (torch.Tensor): Independent variables matrix X.
-        Z (torch.Tensor): Independent variables matrix Z.
-
-        Returns:
-        torch.Tensor: Predicted Y values.
-        """
-        predicted_Y, _, _, _, _ = self.model(X, Z)
+        predicted_Y = self.model(X, Z)
         return predicted_Y
-    
+
 
 class DataSimulation:
     def __init__(
@@ -195,7 +174,7 @@ class DataSimulation:
         self.G = nn.Parameter(torch.tensor(G, device=device))
         self._obtain_initial_parameters_by_lr()
         self.save_simulated_parameters()
-        self.model = DynamicLinearModel().to(device)
+        self.model = DynamicLinearModel(num_runs=1).to(device)
 
     def generate_simulated_Y(self) -> torch.Tensor:
         """
@@ -208,10 +187,13 @@ class DataSimulation:
         self.model.eta = self.eta
         self.model.zeta = self.zeta
         self.model.gamma = self.gamma
+        s = time.time()
         simulated_Y, _, _, _, _ = self.model.forward(
             self.X_t, self.Z_t, is_simulation=True
         )
-        return simulated_Y
+        e = time.time()
+        print("generate_simulated_Y", e - s)
+        return simulated_Y[0]
 
     def get_simulation_results(self) -> dict:
         """
@@ -224,7 +206,7 @@ class DataSimulation:
         results_Y = {"actual_Y": self.Y_t.cpu().numpy(), "simulated_Y": simulated_Y}
         utils.log_parameters_results(self.G, self.eta, self.zeta)
         return results_Y
-    
+
     def save_simulated_parameters(self):
         """
         Save the simulated parameters to a CSV file by adding new rows above the original file.
@@ -256,7 +238,10 @@ class DataSimulation:
         Obtain eta (η), zeta (ζ) gamma (γ) by fitting a linear regression model to XZ_t and Y_t.
         """
         XZ_t = np.hstack((self.X_t.cpu().numpy(), self.Z_t.cpu().numpy()))
-        model_XZ = LinearRegression().fit(XZ_t, self.Y_t.cpu().numpy())
+        model_XZ = LinearRegression(
+            fit_intercept=False,
+            # positive=True
+        ).fit(XZ_t, self.Y_t.cpu().numpy())
         eta_zeta = model_XZ.coef_
 
         self.eta = nn.Parameter(
@@ -265,8 +250,10 @@ class DataSimulation:
         self.zeta = nn.Parameter(
             torch.tensor(eta_zeta[self.X_t.shape[1] :], device=device)
         )
-        
+
         if config["simulationRecovery"]["isGammaEqualZeta"]:
             self.gamma = self.zeta
         else:
-            self.gamma = nn.Parameter(torch.randn(config["dataset"]["zDim"], device=device))
+            self.gamma = nn.Parameter(
+                torch.randn(config["dataset"]["zDim"], device=device)
+            )

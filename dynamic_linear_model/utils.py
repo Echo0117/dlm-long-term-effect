@@ -54,7 +54,7 @@ def log_parameters_results(
 
 
 def calculate_statistics(
-    Gs: list, etas: list, zetas: list, gammas: list, best_run_number: int
+    recovered_parameters, best_run_number: int
 ) -> None:
     """
     Calculate and print the statistics of the parameters from multiple runs.
@@ -65,11 +65,13 @@ def calculate_statistics(
     zetas (list): List of zeta values.
     gammas (list): List of gamma values.
     """
+    print("recovered_parametersrecovered_parameters", recovered_parameters)
+
     Gs, etas, zetas, gammas = (
-        np.array(Gs),
-        np.array(etas),
-        np.array(zetas),
-        np.array(gammas),
+        recovered_parameters["G"],
+        recovered_parameters["eta"],
+        recovered_parameters["zeta"],
+        recovered_parameters["gamma"],
     )
 
     def compute_stats(data, axis=None):
@@ -194,7 +196,8 @@ class Plotter:
         """
         ax.plot(data_1, "b-", label=label1)
         ax.plot(data_2, "r--", label=label2)
-
+        print("data_1", data_1)
+        print("data_2", data_2)
         original_g = config["modelTraining"]["originalG"]
         config_text = ""
         if config["inferenceMethod"] == "mcmc":
@@ -210,13 +213,13 @@ class Plotter:
         )
 
     def plot_metrics_multiprocess(
-        self, metrics_list: list, ax_training: list, ax_optim_g: list
+        self, metrics: tuple, ax_training: list, ax_optim_g: list
     ) -> None:
         """
         Plot losses and parameter changes from collected metrics.
 
         Parameters:
-        metrics_list (list): List of metrics from each run.
+        metrics (tuple): List of metrics from each run.
         ax_training (list): List of matplotlib axes for training metrics.
         ax_optim_g (list): List of matplotlib axes for optimization metrics.
         """
@@ -228,11 +231,17 @@ class Plotter:
         if isinstance(ax_optim_g, Axes):
             ax_optim_g = [ax_optim_g]
 
+        params_before_list, params_after_optim_list, losses_list = metrics
+        
+        # print("params_before_listss", params_before_list)
+        print("params_before_list", len(params_before_list))
+        print("params_before_list", params_before_list)
+        print("ax_training", len(ax_training))
         for i, (
-            (params_before, params_after_optim, losses),
+            params_before, params_after_optim, losses,
             ax_training_sub,
             ax_optim_g_sub,
-        ) in enumerate(zip(metrics_list, ax_training, ax_optim_g)):
+        ) in enumerate(zip(params_before_list, params_after_optim_list, losses_list, ax_training, ax_optim_g)):
             ax_training_sub.plot(
                 range(start_epoch, config["modelTraining"]["epoch"]),
                 losses[start_epoch:],
@@ -251,7 +260,9 @@ class Plotter:
             ax_training_sub.set_title(
             f'Independent run {i} with G = {"{:.1f}".format(config["modelTraining"]["originalG"])}',
             )
-
+            print("len params_beforeparams_before", len(params_before))
+            print("params_beforeparams_before",params_before)
+            # print("params_beforeparams_before", params_before)
             ax_optim_g_sub.plot(
                 range(len(params_before)),
                 params_before,
@@ -276,44 +287,34 @@ class Plotter:
             f'Independent run {i} with G = {"{:.1f}".format(config["modelTraining"]["originalG"])}',
             )
 
-    def plot_params(self, params_list: list, ax: Axes) -> tuple:
+    def plot_params(self, params, ax: Axes) -> tuple:
         """
         Plot the G, eta, zeta, and gamma values for each run.
-
-        Parameters:
-        params_list (list): List of parameters from each run.
-        ax (matplotlib.axes.Axes): Axes for plotting.
-
-        Returns:
-        tuple: Tuple containing lists of G, eta, zeta, and gamma values.
         """
-        num_runs = len(params_list)
+        num_runs = config["simulationRecovery"]["independentRun"]
+       
+        parameters = {"G": None, "eta": None, "zeta": None, "gamma": None}
 
-        Gs, etas, zetas, gammas = [], [], [], []
-        param_mappings = {"G": Gs, "eta": etas, "zeta": zetas, "gamma": gammas}
-
-        for _, params in enumerate(params_list):
-            for name, param in params:
-                if name in param_mappings:
-                    if name == "G":
-                        param_mappings[name].append(
-                            torch.sigmoid(param).data.cpu().numpy()
-                        )
-                    else:
-                        param_mappings[name].append(param.data.cpu().numpy())
-
-        ax.plot(range(num_runs), Gs, label=f"G")
-        parameters = {
-            "eta": np.array(etas).T,
-            "zeta": np.array(zetas).T,
-            "gamma": np.array(gammas).T,
+        # for _, params in enumerate(params_list):
+        for name, param in params:
+            if name in parameters:
+                if name == "G":
+                    parameters[name] = torch.sigmoid(param).data.cpu().numpy()
+                else:
+                    parameters[name] = param.data.cpu().numpy()
+        
+        ax.plot(range(num_runs), parameters["G"], label=f"G")
+        parameters_plotting = {
+            "eta": parameters["eta"].T,
+            "zeta": parameters["zeta"].T,
+            "gamma": parameters["gamma"].T,
         }
-        for param_name, param_values in parameters.items():
+        for param_name, param_values in parameters_plotting.items():
             for i in range(param_values.shape[0])[:2]:
                 ax.plot(range(num_runs), param_values[i], label=f"{param_name} {i+1}")
         ax.set_xticks(range(num_runs))
 
-        return Gs, etas, zetas, gammas
+        return parameters
 
     def setup_and_legend(
         self,
