@@ -1,6 +1,7 @@
 import glob
 import logging
 import os
+import random
 from loguru import logger
 import numpy as np
 import pandas as pd
@@ -179,6 +180,37 @@ def generate_combined_simulated_params(directory):
     combined_df.to_csv(output_file, index=False)
 
 
+def select_best_performance_simulated_params(simulated_parameters_path, loss_results_path):
+
+    simulated_parameters_df = pd.read_csv(simulated_parameters_path)
+    loss_results_df = pd.read_csv(loss_results_path)
+    combined_simulated_parameters_df = simulated_parameters_df.copy()
+
+    for iteration in config["simulationRecovery"]["independentRunList"]:
+        # Assuming df and loss_results_df are defined DataFrames
+        iteration_columns = [col for col in simulated_parameters_df.columns if col.startswith('iteration')]
+
+        selected_columns = random.sample(iteration_columns, iteration)
+        print("selected_columns", selected_columns)
+        selected_columns_index = [int(s.split()[-1])-1 for s in selected_columns]
+
+        selected_losses = loss_results_df.iloc[selected_columns_index].reset_index() # Row 1 contains the loss values
+        min_loss_row = selected_losses.iloc[selected_losses['loss value'].idxmin()]
+
+        # Extract the independent run value from the row
+        independent_run_value = int(min_loss_row['independent run'])
+
+        # Selecting iteration 1 and iteration 2 columns
+        selected_iterations = simulated_parameters_df[selected_columns]
+
+        # Calculating mean and std for each row
+        combined_simulated_parameters_df[f'Mean (independent run {iteration})'] = selected_iterations.mean(axis=1)
+        combined_simulated_parameters_df[f'Std (independent run {iteration})'] = selected_iterations.std(axis=1)
+        combined_simulated_parameters_df[f'Best (independent run {iteration})'] = selected_iterations[f"iteration {independent_run_value}"]
+        
+    output_file = f'{os.path.dirname(config["simulationRecovery"]["paramsSavedPath"])}/combined_simulated_parameters.csv'
+    combined_simulated_parameters_df.to_csv(output_file, index=False)
+
 class Plotter:
     def plot(
         self, data_1, data_2, label1: str, label2: str, title: str, ax: Axes
@@ -231,10 +263,6 @@ class Plotter:
 
         params_before_list, params_after_optim_list, losses_list = metrics
         
-        # print("params_before_listss", params_before_list)
-        print("params_before_list", len(params_before_list))
-        print("params_before_list", params_before_list)
-        print("ax_training", len(ax_training))
         for i, (
             params_before, params_after_optim, losses,
             ax_training_sub,
@@ -258,15 +286,15 @@ class Plotter:
             ax_training_sub.set_title(
             f'Independent run {i} with G = {"{:.1f}".format(config["modelTraining"]["originalG"])}',
             )
-            print("len params_beforeparams_before", len(params_before))
-            print("params_beforeparams_before",params_before)
             # print("params_beforeparams_before", params_before)
+            print("params_before", params_before)
             ax_optim_g_sub.plot(
                 range(len(params_before)),
                 params_before,
                 label=f"G Before Optimization ",
             )
 
+            print("params_after_optim", params_after_optim)
             ax_optim_g_sub.plot(
                 range(len(params_after_optim)),
                 params_after_optim,

@@ -45,8 +45,6 @@ class DynamicLinearModel(nn.Module):
             is_add_sigmoid = config["modelTraining"]["addSigmoid"]
 
         T = X_t.size(0)
-        xDim = X_t.size(1)
-        zDim = Z_t.size(1)
 
         # Initialize predicted_Y for all runs
         predicted_Y = torch.zeros(self.num_runs, T, device=device)

@@ -68,9 +68,9 @@ class SimulationRecovery:
             f"best final loss: {best_loss}, best final loss is at epoch: {best_epoch}, the index of best run: {best_loss_run_index}"
         )
         metrics_list = (params_before, params_after_optim, losses)
+        print("metrics_list", metrics_list)
         plotter.plot_metrics_multiprocess(metrics_list, ax_training, ax_optim_g)
 
-        print("named_parameters", named_parameters)
         recovered_parameters = plotter.plot_params(named_parameters, ax)
         utils.calculate_statistics(recovered_parameters, best_loss_run_index)
 
@@ -86,15 +86,21 @@ class SimulationRecovery:
             weight_decay=config["modelTraining"]["weightDecay"],
         )
 
-        outputs_list, losses_list, params_before, params_after_optim = [], [], [], []
+        (
+            outputs_list,
+            losses_list,
+            g_params_before_list,
+            g_params_after_optim_list,
+            all_parameters_list,
+        ) = ([], [], [], [], [])
 
         for epoch in tqdm(range(self.epoch), desc="Epochs"):
-            
-            
+
             optimizer.zero_grad()
             outputs, G_hat, _, _, _ = self.model.forward(X_t, Z_t)
-            # params_before_epoch = [param.clone().data for param in self.model.G]
-            params_before_epoch = G_hat.data
+
+            # params_before_epoch = G_hat.data
+            # params_before_optim = self.model.named_parameters()
             batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
 
             # Backward each loss separately
@@ -102,14 +108,17 @@ class SimulationRecovery:
                 loss.backward(retain_graph=True)
             optimizer.step()
 
-            params_after_epoch = [torch.sigmoid(param.clone().data) for param in self.model.G]
+            g_params_after_optim = [
+                torch.sigmoid(param.clone().data) for param in self.model.G
+            ]
+            params_after_optim = self.model.named_parameters()
 
-            params_before.append(params_before_epoch)
-            params_after_optim.append(params_after_epoch)
+            g_params_before_list.append(G_hat.data)
+            g_params_after_optim_list.append(g_params_after_optim)
+            all_parameters_list.append(params_after_optim)
             losses_list.append(batch_losses.data.cpu().numpy())
             outputs_list.append(outputs.data.cpu().numpy())
 
-            
             if epoch % 100 == 0:
                 logging.info(
                     f"epoch {epoch}: Total mean Loss = {batch_losses.mean().item()}"
@@ -120,21 +129,49 @@ class SimulationRecovery:
 
         # ipdb.set_trace()
 
-        params_before_np = np.array(params_before)
-        params_after_optim_np = np.array(params_after_optim)
+        params_before_np = np.array(g_params_before_list)
+        params_after_optim_np = np.array(g_params_after_optim_list)
         losses_np = np.array(losses_list)
         outputs_np = np.array(outputs_list)
 
-        print("params_before_np", params_before_np)
-        print("params_after_optim_np", params_after_optim_np)
+        print("all_parameters", all_parameters_list)
         # Find the index of the index of best performance
         min_index_1d = np.argmin(losses_np)
         min_index_2d = np.unravel_index(min_index_1d, losses_np.shape)
+        print("losses_nplosses_np", losses_np)
 
         best_epoch = min_index_2d[0]
         best_loss_run_index = min_index_2d[1]
         best_loss = losses_np[min_index_2d]
         best_predicted_Y = outputs_np[min_index_2d]
+
+        # Create a DataFrame with the required structure
+        min_indices_by_column_independent = np.argmin(losses_np, axis=0)
+        min_values_by_column_independent = losses_np[
+            min_indices_by_column_independent, np.arange(losses_np.shape[1])
+        ]
+        loss_data = {
+            "independent run": [
+                x + 1 for x in list(range(len(min_indices_by_column_independent)))
+            ],
+            "epoch index": min_indices_by_column_independent,
+            "loss value": min_values_by_column_independent,
+        }
+        pd.DataFrame(loss_data).to_csv(config["modelTraining"]["lossPath"])
+        logger.info(f"file loss_results saved at {config['modelTraining']['lossPath']}")
+        # loss_df = loss_df.set_index("independent run").T
+        # loss_df.columns = [f"iteration {i+1}" for i in range(len(min_indices_by_column_independent))]
+        # loss_df.to_csv(config["modelTraining"]["lossPath"])
+
+        # for name, parameters in all_parameters:
+
+        # Convert the generator to a list of dictionaries
+        param_list = list(all_parameters_list)
+
+        # Convert the list of dictionaries to a DataFrame
+        df = pd.DataFrame(param_list)
+        df.columns = ["G", "eta", "zeta", "gamma"]
+        df.to_csv(config["modelTraining"]["parametersPath"], index=False)
 
         return (
             self.model.named_parameters(),
@@ -188,12 +225,9 @@ class DataSimulation:
         self.model.eta = self.eta
         self.model.zeta = self.zeta
         self.model.gamma = self.gamma
-        s = time.time()
         simulated_Y, _, _, _, _ = self.model.forward(
             self.X_t, self.Z_t, is_simulation=True
         )
-        e = time.time()
-        print("generate_simulated_Y", e - s)
         return simulated_Y[0]
 
     def get_simulation_results(self) -> dict:

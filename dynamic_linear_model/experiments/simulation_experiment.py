@@ -6,7 +6,12 @@ from loguru import logger
 
 from config import config
 from dynamic_linear_model.data_simulation import DataSimulation, SimulationRecovery
-from dynamic_linear_model.utils import Plotter, delete_existing_files, generate_combined_simulated_params
+from dynamic_linear_model.utils import (
+    Plotter,
+    delete_existing_files,
+    generate_combined_simulated_params,
+    select_best_performance_simulated_params,
+)
 
 
 def simulation_recovery(X_t, Z_t, Y_t, plot_result=True):
@@ -51,6 +56,8 @@ def simulation_recovery(X_t, Z_t, Y_t, plot_result=True):
             ax[0], ax_training, ax_optim_g
         )
 
+        print("simulated_Ysimulated_Y", simulated_Y)
+        print("predicted_Y", predicted_Y)
         if plot_result:
             plotter.plot(
                 simulated_Y,
@@ -85,20 +92,39 @@ def simulation_recovery(X_t, Z_t, Y_t, plot_result=True):
     end_time = timeit.default_timer()
     execution_time = end_time - start_time
     logger.info(f"Execution time: {execution_time:.6f} seconds")
-    
+
     if plot_result:
         plt.tight_layout()
         plt.show()
 
 
-def simulation_recovery_with_multi_independent_runs(X_t, Z_t, Y_t):
+def simulation_recovery_with_multi_independent_runs_list(X_t, Z_t, Y_t):
 
     directory_path = os.path.dirname(config["simulationRecovery"]["paramsSavedPath"])
 
     for num_runs in config["simulationRecovery"]["independentRunList"]:
         config["simulationRecovery"]["independentRun"] = num_runs
-        config["simulationRecovery"]["paramsSavedPath"] = os.path.join(directory_path, f"simulated_parameters_{num_runs}.csv")
-        
+        config["simulationRecovery"]["paramsSavedPath"] = os.path.join(
+            directory_path, f"simulated_parameters_{num_runs}.csv"
+        )
+
         simulation_recovery(X_t, Z_t, Y_t, plot_result=False)
 
     generate_combined_simulated_params(directory_path)
+
+
+def simulation_recovery_with_multi_independent_runs(X_t, Z_t, Y_t):
+
+    directory_path = os.path.dirname(config["simulationRecovery"]["paramsSavedPath"])
+    num_independet_runs = max(config["simulationRecovery"]["independentRunList"])
+    config["simulationRecovery"]["independentRun"] = num_independet_runs
+
+    config["simulationRecovery"]["paramsSavedPath"] = os.path.join(
+        directory_path, f"simulated_parameters_total_{num_independet_runs}.csv"
+    )
+    simulation_recovery(X_t, Z_t, Y_t, plot_result=False)
+
+    select_best_performance_simulated_params(
+        config["simulationRecovery"]["paramsSavedPath"],
+        config["modelTraining"]["lossPath"],
+    )
