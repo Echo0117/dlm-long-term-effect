@@ -294,7 +294,6 @@ class Plotter:
                 label=f"G Before Optimization ",
             )
 
-            print("params_after_optim", params_after_optim)
             ax_optim_g_sub.plot(
                 range(len(params_after_optim)),
                 params_after_optim,

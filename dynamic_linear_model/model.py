@@ -6,7 +6,8 @@ import torch.nn as nn
 from config import config
 
 # Enable anomaly detection
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)
+# torch.backends.cudnn.benchmark = True
 
 device = config["device"]
 
@@ -17,11 +18,14 @@ class DynamicLinearModel(nn.Module):
         self.num_runs = num_runs
         
         # Initialize parameters for all runs
+        # self.G = nn.Parameter(
+        #     torch.tensor([random.uniform(-4, 4) for _ in range(num_runs)], device=device)
+        # )  # State transition coefficients
         self.G = nn.Parameter(
-            torch.tensor([random.uniform(-4, 4) for _ in range(num_runs)], device=device)
-        )  # State transition coefficients
+            torch.FloatTensor(num_runs).uniform_(-4, 4).to(device)
+        ) # State transition coefficients
         self.eta = nn.Parameter(
-            torch.randn(num_runs, config["dataset"]["xDim"], device=device)
+            torch.abs(torch.randn(num_runs, config["dataset"]["xDim"], device=device))
         )  # Coefficients for X_t
         self.zeta = nn.Parameter(
             torch.randn(num_runs, config["dataset"]["zDim"], device=device)
@@ -56,8 +60,12 @@ class DynamicLinearModel(nn.Module):
             G_hat = self.G
 
         # Repeat X_t and Z_t for all runs
-        X_t_repeated = X_t.unsqueeze(0).repeat(self.num_runs, 1, 1)
-        Z_t_repeated = Z_t.unsqueeze(0).repeat(self.num_runs, 1, 1)
+        # X_t_repeated = X_t.unsqueeze(0).repeat(self.num_runs, 1, 1)
+        # Z_t_repeated = Z_t.unsqueeze(0).repeat(self.num_runs, 1, 1)
+
+        X_t_repeated = X_t.unsqueeze(0).expand(self.num_runs, -1, -1)
+        Z_t_repeated = Z_t.unsqueeze(0).expand(self.num_runs, -1, -1)
+
 
         # Initialize theta for all runs
         theta = torch.zeros(self.num_runs, device=device)
@@ -69,13 +77,12 @@ class DynamicLinearModel(nn.Module):
                 theta + torch.sum(X_t_repeated[:, t] * eta_hat, dim=1) + torch.sum(Z_t_repeated[:, t] * zeta_hat, dim=1)
             )
 
-        return (
-            predicted_Y,
-            G_hat.data.cpu().numpy(),
-            eta_hat.data.cpu().numpy(),
-            zeta_hat.data.cpu().numpy(),
-            gamma_hat.data.cpu().numpy(),
-        )
+        return predicted_Y
+            # G_hat.data.cpu().numpy(),
+            # eta_hat.data.cpu().numpy(),
+            # zeta_hat.data.cpu().numpy(),
+            # gamma_hat.data.cpu().numpy(),
+        
 
     
     def save_model(self, model_path: str) -> None:

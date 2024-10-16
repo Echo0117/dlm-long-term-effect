@@ -11,18 +11,20 @@
   },
   "inferenceMethod": "torch_autograd", 
   "modelTraining": {
-    "epoch": 300,
+    "epoch": 1000,
     "learningRate": 0.000197583,
     "momentum": 0.635068,
     "weightDecay": 1.84818e-05,
     "originalG": 0.0, 
     "addSigmoid": true,
-    "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl"
+    "modelPath": "/Users/echo/Desktop/Desktop_Echo_MacBook_Air/coding/echo_github/dlm-long-term-effect/saved_models/model.pkl",
+    "lossPath": "dataset/generated_results/loss_results.csv",
+    "parametersPath": "dataset/generated_results/parameters_results.csv"
   },
   "simulationRecovery":{
-    "independentRun": 2,
-    "independentRunList": [2, 5, 10, 20, 50],
-    "ListG": [0.1, 0.6, 0.9],
+    "independentRun": 50,
+    "independentRunList": [2, 5, 10, 30],
+    "ListG": [0.1],
     "paramsSavedPath": "dataset/generated_results/simulated_parameters.csv",
     "simulatedParamSavedPath": "dataset/generated_results/temp_simulated.csv",
     "isGammaEqualZeta": false

@@ -52,19 +52,19 @@ def simulation_recovery(X_t, Z_t, Y_t, plot_result=True):
         simulated_Y = torch.tensor(
             simulated_results["simulated_Y"], dtype=torch.float32
         )
+
+        simulated_Y = Y_t
         predicted_Y = SimulationRecovery(X_t, Z_t, simulated_Y).recovery_for_simulation(
             ax[0], ax_training, ax_optim_g
         )
 
-        print("simulated_Ysimulated_Y", simulated_Y)
-        print("predicted_Y", predicted_Y)
         if plot_result:
             plotter.plot(
                 simulated_Y,
                 predicted_Y,
-                "Simulated Y_t",
+                "Actual Y_t",
                 "Predicted Y_t",
-                "Simulated vs Predicted",
+                "Actual vs Predicted",
                 ax[1],
             )
 

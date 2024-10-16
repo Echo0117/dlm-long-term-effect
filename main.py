@@ -31,12 +31,17 @@ if __name__ == "__main__":
     run the simulation recovery with independent run based on the 
     config["simulationRecovery"]["independentRun"] to see the plot
     """
-    # simulation_recovery(X_t, Z_t, Y_t)
+    simulation_recovery(X_t, Z_t, Y_t)
 
     """
     Experiment 2
     it's a parallelly run of the above #1 simulation recovery with a list of independent runs, based on the 
     config["simulationRecovery"]["independentRunList"] to see the parameters table.
     """
-    simulation_recovery_with_multi_independent_runs(X_t, Z_t, Y_t)
+    # simulation_recovery_with_multi_independent_runs(X_t, Z_t, Y_t)
 
+    """
+    Experiment 3
+    it's a parallelly run of the above #1 simulation recovery with a list of independent runs, based on the 
+    config["simulationRecovery"]["independentRunList"] to see the parameters table.
+    """
