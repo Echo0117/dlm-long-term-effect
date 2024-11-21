@@ -48,8 +48,15 @@ class DataPreprocessing:
         df = self._filter_brand(df)
         Y_t = self._dependent_variable(df)
         X_t, Z_t = self._independent_variables(df)
+
+        # Handle missing values by replacing NaNs with zeros
+        X_t, Z_t, Y_t = self._handle_missing_values(X_t, Z_t, Y_t)
+        X_t, Z_t, Y_t, non_zero_indices = self._remove_zero_y_values(X_t, Z_t, Y_t)
+        config["dataset"]["year_week"] = df["year_week"].values[non_zero_indices]
+
         if normalization:
             X_t, Z_t, Y_t = self._normalize_data(X_t, Z_t, Y_t)
+
         return X_t, Z_t, Y_t
 
     def get_normalized_scaler(self):
@@ -68,7 +75,7 @@ class DataPreprocessing:
         Returns:
         pd.DataFrame: DataFrame containing the loaded data.
         """
-        df = pd.read_csv(self.file_path)
+        df = pd.read_csv(self.file_path, sep=";")
         return df
 
     def _filter_brand(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -135,7 +142,47 @@ class DataPreprocessing:
         Y_t_normalized = self.scaler_Y.fit_transform(Y_t.reshape(-1, 1)).flatten()
 
         return X_t_normalized, Z_t_normalized, Y_t_normalized
+    
+    def _handle_missing_values(
+        self, X_t: np.ndarray, Z_t: np.ndarray, Y_t: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Handle missing values in X_t, Z_t, and Y_t by replacing NaNs with zeros.
+        
+        Parameters:
+        X_t (np.ndarray): Array containing the independent variables X.
+        Z_t (np.ndarray): Array containing the independent variables Z.
+        Y_t (np.ndarray): Array containing the dependent variable values.
 
+        Returns:
+        Tuple[np.ndarray, np.ndarray, np.ndarray]: Arrays with NaNs replaced by zeros.
+        """
+        # Replace NaNs with zeros
+        X_t = np.nan_to_num(X_t, nan=0.0)
+        Z_t = np.nan_to_num(Z_t, nan=0.0)
+        Y_t = np.nan_to_num(Y_t, nan=0.0)
+
+        return X_t, Z_t, Y_t
+
+    def _remove_zero_y_values(
+        self, X_t: np.ndarray, Z_t: np.ndarray, Y_t: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Remove rows where Y_t has a value of zero.
+
+        Parameters:
+        X_t (np.ndarray): Array containing the independent variables X.
+        Z_t (np.ndarray): Array containing the independent variables Z.
+        Y_t (np.ndarray): Array containing the dependent variable values.
+
+        Returns:
+        Tuple[np.ndarray, np.ndarray, np.ndarray]: Filtered arrays with rows removed where Y_t is zero.
+        """
+        non_zero_indices = Y_t != 0  # Create a mask for rows where Y_t is non-zero
+        X_t = X_t[non_zero_indices]
+        Z_t = Z_t[non_zero_indices]
+        Y_t = Y_t[non_zero_indices]
+        return X_t, Z_t, Y_t, non_zero_indices
 
 class AbsoluteMedianScaler(BaseEstimator, TransformerMixin):
     def fit(self, X: np.ndarray, y: np.ndarray = None) -> 'AbsoluteMedianScaler':
@@ -150,10 +197,8 @@ class AbsoluteMedianScaler(BaseEstimator, TransformerMixin):
         AbsoluteMedianScaler: The fitted scaler.
         """
         self.medians_ = []
-
         for col in range(X.shape[1]):
             col_median = np.median(X[:, col])
-
             if col_median == 0:
                 non_zero_values = X[:, col][X[:, col] != 0]
                 if non_zero_values.size > 0:

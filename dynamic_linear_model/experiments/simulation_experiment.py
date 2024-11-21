@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import torch
 import timeit
 import matplotlib.pyplot as plt
@@ -14,14 +15,19 @@ from dynamic_linear_model.utils import (
 )
 
 
-def simulation_recovery(X_t, Z_t, Y_t, plot_result=True):
+def trainer(X_t, Z_t, Y_t, plot_result=True, ax=None):
     """
-
     Parameters:
     X_t (np.ndarray): Independent variables matrix X.
     Z_t (np.ndarray): Independent variables matrix Z.
     Y_t (np.ndarray): Dependent variable vector Y.
-    plot_result(bool): choose to plot the results or not
+    plot_result(bool): Choose to plot the results or not.
+    ax (matplotlib.axes._subplots.AxesSubplot): Subplot to plot results on.
+
+    Returns:
+    gamma_best (list): List of gamma best values.
+    zeta_best (list): List of zeta best values.
+    labels (list): List of labels for zeta parameters.
     """
     start_time = timeit.default_timer()
     delete_existing_files(
@@ -29,76 +35,37 @@ def simulation_recovery(X_t, Z_t, Y_t, plot_result=True):
         config["simulationRecovery"]["simulatedParamSavedPath"],
     )
 
-    G_list = config["simulationRecovery"]["ListG"]
-    num_runs = config["simulationRecovery"]["independentRun"]
-
-    fig, axs = plt.subplots(len(G_list), 2, figsize=(16, 8))
-    fig_optim_g, axs_optim_g = plt.subplots(len(G_list), num_runs, figsize=(16, 8))
-    fig_training, axs_training = plt.subplots(len(G_list), num_runs, figsize=(16, 8))
-
-    # Ensure axs, axs_optim_g, and axs_training are 2D arrays if G_list has more than one element
-    if len(G_list) == 1:
-        axs = [axs]
-        axs_optim_g = [axs_optim_g]
-        axs_training = [axs_training]
-
     plotter = Plotter()
-    for G, ax, ax_training, ax_optim_g in zip(G_list, axs, axs_training, axs_optim_g):
-        config["modelTraining"]["originalG"] = G
-        logger.info(f"Running on G = {G}")
+    val_indices = None
+    if config["modelTraining"]["ifCrossValidation"]:
+        predicted_Y, val_indices = SimulationRecovery(X_t, Z_t, Y_t).cross_validate(k_folds=5)
+    else:
+        predicted_Y, val_indices = SimulationRecovery(X_t, Z_t, Y_t).recovery_for_simulation(ax)
 
-        data_simulation = DataSimulation(X_t, Z_t, Y_t, G)
-        simulated_results = data_simulation.get_simulation_results()
-        simulated_Y = torch.tensor(
-            simulated_results["simulated_Y"], dtype=torch.float32
+    if plot_result:
+        plotter.plot(
+            config["dataset"]["year_week"][val_indices],
+            Y_t[val_indices],
+            predicted_Y,
+            "Actual Y_t",
+            "Predicted Y_t",
+            f"{config['dataset']['brand']} - Actual vs Predicted",
+            ax
         )
-
-        simulated_Y = Y_t
-        predicted_Y = SimulationRecovery(X_t, Z_t, simulated_Y).recovery_for_simulation(
-            ax[0], ax_training, ax_optim_g
+        plotter.setup_and_legend(
+            ax, "Time", "Volume Sold", f"{config['dataset']['brand']} - Actual vs Predicted"
         )
-
-        if plot_result:
-            plotter.plot(
-                simulated_Y,
-                predicted_Y,
-                "Actual Y_t",
-                "Predicted Y_t",
-                "Actual vs Predicted",
-                ax[1],
-            )
-
-            plotter.setup_and_legend(
-                fig_optim_g, "Epoch", "value", "change of g value during optimizing"
-            )
-            plotter.setup_and_legend(
-                fig_training, "Epoch", "Loss", "Change of Loss during Recovery"
-            )
-            plotter.setup_and_legend(
-                fig.axes[0],
-                "Independent Run",
-                "Parameters Value",
-                "Change of parameters with different runs",
-            )
-            plotter.setup_and_legend(
-                fig.axes[1], "Time", "Volume Sold", "Simulated vs Predicted"
-            )
-            plotter.add_config_text(fig)
-
-            fig.tight_layout()
-            fig_optim_g.tight_layout()
-            fig_training.tight_layout()
 
     end_time = timeit.default_timer()
     execution_time = end_time - start_time
     logger.info(f"Execution time: {execution_time:.6f} seconds")
 
-    if plot_result:
-        plt.tight_layout()
-        plt.show()
+    # Get gamma and zeta best values
+    gamma_best, zeta_best, labels = plotter.get_gamma_zeta_best_values(config["simulationRecovery"]["paramsSavedPath"])
+    return gamma_best, zeta_best, labels
 
 
-def simulation_recovery_with_multi_independent_runs_list(X_t, Z_t, Y_t):
+def trainer_with_multi_independent_runs_list(X_t, Z_t, Y_t):
 
     directory_path = os.path.dirname(config["simulationRecovery"]["paramsSavedPath"])
 
@@ -108,12 +75,12 @@ def simulation_recovery_with_multi_independent_runs_list(X_t, Z_t, Y_t):
             directory_path, f"simulated_parameters_{num_runs}.csv"
         )
 
-        simulation_recovery(X_t, Z_t, Y_t, plot_result=False)
+        trainer(X_t, Z_t, Y_t, plot_result=False)
 
     generate_combined_simulated_params(directory_path)
 
 
-def simulation_recovery_with_multi_independent_runs(X_t, Z_t, Y_t):
+def trainer_with_multi_independent_runs(X_t, Z_t, Y_t):
 
     directory_path = os.path.dirname(config["simulationRecovery"]["paramsSavedPath"])
     num_independet_runs = max(config["simulationRecovery"]["independentRunList"])
@@ -122,7 +89,7 @@ def simulation_recovery_with_multi_independent_runs(X_t, Z_t, Y_t):
     config["simulationRecovery"]["paramsSavedPath"] = os.path.join(
         directory_path, f"simulated_parameters_total_{num_independet_runs}.csv"
     )
-    simulation_recovery(X_t, Z_t, Y_t, plot_result=False)
+    trainer(X_t, Z_t, Y_t, plot_result=False)
 
     select_best_performance_simulated_params(
         config["simulationRecovery"]["paramsSavedPath"],

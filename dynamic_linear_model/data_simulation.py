@@ -1,6 +1,5 @@
 import logging
 import os
-import pdb
 import time
 import numpy as np
 import pandas as pd
@@ -10,28 +9,15 @@ import torch.optim as optim
 from loguru import logger
 from matplotlib.axes import Axes
 from sklearn.linear_model import LinearRegression
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from sklearn.model_selection import TimeSeriesSplit
+
 from tqdm import tqdm
-import torch.multiprocessing as mp
 import ipdb
 from config import config
 from dynamic_linear_model.losses import mse_loss
 from dynamic_linear_model.model import DynamicLinearModel
 import dynamic_linear_model.utils as utils
 
-
-device = config["device"]
-
-from config import config
-from dynamic_linear_model.losses import mse_loss
-from dynamic_linear_model.model import DynamicLinearModel
-import dynamic_linear_model.utils as utils
-import numpy as np
-import torch
-import torch.optim as optim
-from tqdm import tqdm
-import logging
-from matplotlib.axes import Axes
 
 device = config["device"]
 
@@ -48,100 +34,124 @@ class SimulationRecovery:
         self.model = DynamicLinearModel(self.num_runs).to(device)
 
     def recovery_for_simulation(
-        self, ax: Axes, ax_training: Axes, ax_optim_g: Axes
+        self, ax: Axes
     ) -> np.ndarray:
 
         plotter = utils.Plotter()
-
         (
             named_parameters,
-            # params_before,
-            # params_after_optim,
-            # losses,
             best_epoch,
             best_loss_run_index,
             best_loss,
             best_predicted_Y,
-        ) = self._optimize(self.Y_t, self.X_t, self.Z_t)
-
+            val_best_predicted_Y
+        ) = self._optimize(self.Y_t[:240], self.X_t[:240], self.Z_t[:240], self.Y_t[240:], self.X_t[240:], self.Z_t[240:])
         logger.info(
             f"best final loss: {best_loss}, best final loss is at epoch: {best_epoch}, the index of best run: {best_loss_run_index}"
         )
-        # metrics_list = (params_before, params_after_optim, losses)
-        # plotter.plot_metrics_multiprocess(metrics_list, ax_training, ax_optim_g)
 
         recovered_parameters = plotter.plot_params(named_parameters, ax)
         utils.calculate_statistics(recovered_parameters, best_loss_run_index)
-
-        return best_predicted_Y
+        val_indices = range(240, len(self.X_t))
+        return val_best_predicted_Y, val_indices
 
     def _optimize(
-        self, Y_t: torch.Tensor, X_t: torch.Tensor, Z_t: torch.Tensor
+        self, Y_t: torch.Tensor, X_t: torch.Tensor, Z_t: torch.Tensor,
+        Y_val: torch.Tensor = None, X_val: torch.Tensor = None, Z_val: torch.Tensor = None,
     ) -> tuple:
-        optimizer = optim.SGD(
+        # optimizer = optim.SGD(
+        #     self.model.parameters(),
+        #     lr=config["modelTraining"]["learningRate"],
+        #     momentum=config["modelTraining"]["momentum"],
+        #     weight_decay=config["modelTraining"]["weightDecay"],
+        # )
+
+        optimizer = optim.Adam(
             self.model.parameters(),
             lr=config["modelTraining"]["learningRate"],
-            momentum=config["modelTraining"]["momentum"],
             weight_decay=config["modelTraining"]["weightDecay"],
         )
-
         (
             outputs_list,
             losses_list,
-            # g_params_before_list,
-            # g_params_after_optim_list,
             all_parameters_list,
         ) = ([], [], [])
+
+        val_losses = []
+        val_outputs_list = []
+        early_stop_counter = 0
+        best_val_loss = np.inf
+        best_epoch = 0
+        val_loss = None
 
         for epoch in tqdm(range(self.epoch), desc="Epochs"):
 
             optimizer.zero_grad()
-            # outputs, G_hat, _, _, _ = self.model.forward(X_t, Z_t)
             outputs = self.model.forward(X_t, Z_t)
-
-
-            # params_before_epoch = G_hat.data
-            # params_before_optim = self.model.named_parameters()
             batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
 
             # Backward each loss separately
             for loss in batch_losses:
                 loss.backward(retain_graph=True)
             optimizer.step()
-
-            # g_params_after_optim = [
-            #     torch.sigmoid(param.clone().data) for param in self.model.G
-            # ]
             params_after_optim = self.model.named_parameters()
 
-            # g_params_before_list.append(G_hat.data)
-            # g_params_after_optim_list.append(g_params_after_optim)
+            # Compute batch losses and aggregate
+            batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
+            aggregated_loss = batch_losses.sum() 
+            
+            # Backward pass
+            aggregated_loss.backward()
+            optimizer.step()
+
+            # Validation phase
+            if X_val is not None and Y_val is not None:
+                self.model.eval()
+                with torch.no_grad():
+                    val_outputs = self.model.forward(X_val, Z_val)
+                    val_batch_losses = mse_loss(val_outputs, Y_val.repeat(self.num_runs, 1))
+                    val_loss = val_batch_losses.mean().item()
+                    val_losses.append(val_loss)
+
+                # Early stopping check
+                if best_val_loss - val_loss > config["modelTraining"]["minDelta"]:
+                    best_val_loss = val_loss
+                    best_epoch = epoch
+                    early_stop_counter = 0
+                else:
+                    early_stop_counter += 1
+
+                if early_stop_counter >= config["modelTraining"]["patience"]:
+                    logger.info(f"Early stopping at epoch {epoch}")
+                    break
+
             all_parameters_list.append(params_after_optim)
-            # losses_list.append(batch_losses.data.cpu().numpy())
-            # outputs_list.append(outputs.data.cpu().numpy())
             losses_list.append(batch_losses.detach().clone())
             outputs_list.append(outputs.detach().clone())
+            val_outputs_list.append(val_outputs.detach().clone())
 
-            if epoch % 100 == 0:
-                logging.info(
-                    f"epoch {epoch}: Total mean Loss = {batch_losses.mean().item()}"
-                )
-
-        for name, param in self.model.named_parameters():
-            logging.info(f"Params {name}: {param.data}")
+            # logger at specified intervals
+            if epoch % 100 == 0 or epoch == epoch - 1:
+                if val_loss is not None:
+                    logger.info(
+                        f"Epoch {epoch}: Training Loss = {batch_losses.mean().item():.6f}, Validation Loss = {val_loss:.6f}"
+                    )
+                else:
+                    logger.info(
+                        f"Epoch {epoch}: Training Loss = {batch_losses.mean().item():.6f}"
+                    )
+        # for name, param in self.model.named_parameters():
+        #     logger.info(f"Params {name}: {param.data}")
 
         # ipdb.set_trace()
-
-        # params_before_np = np.array(g_params_before_list)
-        # params_after_optim_np = np.array(g_params_after_optim_list)
-        # losses_np = np.array(losses_list)
-        # outputs_np = np.array(outputs_list)
 
         losses_tensor = torch.stack(losses_list)  # Shape: (epoch, num_runs, T)
         outputs_tensor = torch.stack(outputs_list)  # Shape: (epoch, num_runs, T)
         losses_np = losses_tensor.cpu().numpy()  # Move once to CPU and convert
         outputs_np = outputs_tensor.cpu().numpy()
 
+        val_outputs_tensor = torch.stack(val_outputs_list) 
+        val_outputs_np = val_outputs_tensor.cpu().numpy()
 
         # Find the index of the index of best performance
         min_index_1d = np.argmin(losses_np)
@@ -151,6 +161,7 @@ class SimulationRecovery:
         best_loss_run_index = min_index_2d[1]
         best_loss = losses_np[min_index_2d]
         best_predicted_Y = outputs_np[min_index_2d]
+        val_best_predicted_Y = val_outputs_np[min_index_2d]
 
         # Create a DataFrame with the required structure
         min_indices_by_column_independent = np.argmin(losses_np, axis=0)
@@ -177,17 +188,180 @@ class SimulationRecovery:
 
         return (
             self.model.named_parameters(),
-            # params_before_np.T,
-            # params_after_optim_np.T,
-            # losses_np.T,
             best_epoch,
             best_loss_run_index,
             best_loss,
             best_predicted_Y,
+            val_best_predicted_Y
         )
 
-    def _get_predicted_Y(self, X: torch.Tensor, Z: torch.Tensor) -> torch.Tensor:
-        predicted_Y = self.model(X, Z)
+    # def cross_validate(self, k_folds=5) -> float:
+    #     tscv = TimeSeriesSplit(n_splits=k_folds)
+    #     all_y_trues = []
+    #     all_y_preds = []
+    #     val_losses = []
+    #     val_r_squared_scores = []
+
+    #     for fold_index, (train_indices, val_indices) in enumerate(tscv.split(self.X_t)):
+    #         logger.info(f"Fold {fold_index + 1}/{k_folds}")
+
+    #         # Split the data into training and validation sets
+    #         # Further split the training indices for early stopping validation
+    #         train_size = int(len(train_indices) * 0.8)
+    #         train_idx = train_indices[:train_size]
+    #         val_idx = train_indices[train_size:]
+
+    #         X_train, X_val = self.X_t[train_idx], self.X_t[val_idx]
+    #         Z_train, Z_val = self.Z_t[train_idx], self.Z_t[val_idx]
+    #         Y_train, Y_val = self.Y_t[train_idx], self.Y_t[val_idx]
+    #         splits = list(tscv.split(self.X_t))
+    #         print(f"Number of splits: {len(splits)}")
+    #         #print("train_size", train_size)
+    #         print("Y_trainlene", len(Y_train))
+    #         print("Y_vallene", len(Y_val))
+    #         start = time.time()
+    #         # Initialize and train the model with early stopping
+    #         (_, _, _, _, best_predicted_Y) = self._optimize(Y_train, X_train, Z_train, Y_val, X_val, Z_val)
+    #         end = time.time()
+    #         print("cross v time", end-start)
+    #         # Evaluate on test validation data (val_indices from TimeSeriesSplit
+    #         with torch.no_grad():
+    #             X_val_fold, Z_val_fold, Y_val_fold = (
+    #                 self.X_t[val_indices],
+    #                 self.Z_t[val_indices],
+    #                 self.Y_t[val_indices],
+    #             )
+    #             outputs = self.model.forward(X_val_fold, Z_val_fold)
+    #             batch_losses = mse_loss(outputs, Y_val_fold.repeat(self.num_runs, 1))
+    #             val_loss = batch_losses.mean().item()
+    #             val_losses.append(val_loss)
+
+    #             # Compute R-squared
+    #             y_true = Y_val_fold.cpu().numpy()
+    #             y_pred = outputs.mean(dim=0).cpu().numpy()  # Average over runs
+    #             all_y_trues.append(y_true)
+    #             all_y_preds.append(y_pred)
+
+    #             ss_res = np.sum((y_true - y_pred) ** 2)
+    #             ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    #             r_squared = 1 - (ss_res / ss_tot)
+    #             val_r_squared_scores.append(r_squared)
+
+    #             logger.info(f"Validation Loss for fold {fold_index + 1}: {val_loss}")
+    #             logger.info(f"R-squared for fold {fold_index + 1}: {r_squared}")
+
+    #     avg_val_loss = sum(val_losses) / len(val_losses)
+    #     avg_r_squared = sum(val_r_squared_scores) / len(val_r_squared_scores)
+
+    #     logger.info(f"Average validation loss across {k_folds} folds: {avg_val_loss:.3f}")
+    #     logger.info(f"Average R-squared loss across {k_folds} folds: {avg_r_squared:.3f}")
+
+    #     val_losses_formatted = [f"{val:.3f}" for val in val_losses]
+    #     r_squared_scores_formatted = [f"{r2:.3f}" for r2 in val_r_squared_scores]
+
+    #     logger.info(f"List validation loss across {k_folds} folds: {val_losses_formatted}")
+    #     logger.info(f"List R-squared across {k_folds} folds: {r_squared_scores_formatted}")
+
+    #     # Concatenate all true and predicted Y values
+    #     all_y_trues = np.concatenate(all_y_trues)
+    #     all_y_preds = np.concatenate(all_y_preds)
+
+    #     # Compute overall R-squared
+    #     ss_res = np.sum((all_y_trues - all_y_preds) ** 2)
+    #     ss_tot = np.sum((all_y_trues - np.mean(all_y_trues)) ** 2)
+    #     overall_r_squared = 1 - (ss_res / ss_tot)
+    #     logger.info(f"Overall R-squared across all folds: {overall_r_squared:.3f}")
+
+    #     return best_predicted_Y
+    def cross_validate(self, k_folds=5) -> float:
+        """
+        Perform cross-validation with time series data using TimeSeriesSplit.
+
+        Args:
+            k_folds (int): Number of folds for cross-validation.
+
+        Returns:
+            float: The best-predicted Y values from the best fold.
+        """
+        tscv = TimeSeriesSplit(n_splits=k_folds)
+        all_y_trues = []
+        all_y_preds = []
+        val_losses = []
+        val_r_squared_scores = []
+
+        # Iterate through each split from TimeSeriesSplit
+        for fold_index, (train_indices, val_indices) in enumerate(tscv.split(self.X_t)):
+            logger.info(f"Fold {fold_index + 1}/{k_folds}")
+
+            # Use all training indices provided by TimeSeriesSplit
+            X_train, X_val_fold = self.X_t[train_indices], self.X_t[val_indices]
+            Z_train, Z_val_fold = self.Z_t[train_indices], self.Z_t[val_indices]
+            Y_train, Y_val_fold = self.Y_t[train_indices], self.Y_t[val_indices]
+
+            # Debugging logs for train and validation set sizes
+            logger.info(f"Train size: {len(train_indices)}")
+            logger.info(f"Validation size: {len(val_indices)}")
+
+            # Time tracking for optimization
+            start = time.time()
+
+            # Optimize model using the training data
+            (_, _, _, _, best_predicted_Y, val_best_predicted_Y) = self._optimize(Y_train, X_train, Z_train, Y_val_fold, X_val_fold, Z_val_fold)
+
+            end = time.time()
+            logger.info(f"Cross-validation fold {fold_index + 1} time: {end - start:.2f} seconds")
+
+            # Evaluate on the validation data for the current fold
+            with torch.no_grad():
+                outputs = self.model.forward(X_val_fold, Z_val_fold)
+                batch_losses = mse_loss(outputs, Y_val_fold.repeat(self.num_runs, 1))
+                val_loss = batch_losses.mean().item()
+                val_losses.append(val_loss)
+
+                # Compute R-squared
+                y_true = Y_val_fold.cpu().numpy()
+                y_pred = outputs.mean(dim=0).cpu().numpy()  # Average over runs
+                all_y_trues.append(y_true)
+                all_y_preds.append(y_pred)
+
+                ss_res = np.sum((y_true - y_pred) ** 2)
+                ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+                r_squared = 1 - (ss_res / ss_tot)
+                val_r_squared_scores.append(r_squared)
+
+                logger.info(f"Validation Loss for fold {fold_index + 1}: {val_loss}")
+                logger.info(f"R-squared for fold {fold_index + 1}: {r_squared}")
+
+        # Compute average metrics across all folds
+        avg_val_loss = sum(val_losses) / len(val_losses)
+        avg_r_squared = sum(val_r_squared_scores) / len(val_r_squared_scores)
+
+        logger.info(f"Average validation loss across {k_folds} folds: {avg_val_loss:.3f}")
+        logger.info(f"Average R-squared loss across {k_folds} folds: {avg_r_squared:.3f}")
+
+        val_losses_formatted = [f"{val:.3f}" for val in val_losses]
+        r_squared_scores_formatted = [f"{r2:.3f}" for r2 in val_r_squared_scores]
+
+        logger.info(f"List of validation losses across {k_folds} folds: {val_losses_formatted}")
+        logger.info(f"List of R-squared values across {k_folds} folds: {r_squared_scores_formatted}")
+
+        # Concatenate all true and predicted Y values across folds
+        all_y_trues = np.concatenate(all_y_trues)
+        all_y_preds = np.concatenate(all_y_preds)
+
+        # Compute overall R-squared across all folds
+        ss_res = np.sum((all_y_trues - all_y_preds) ** 2)
+        ss_tot = np.sum((all_y_trues - np.mean(all_y_trues)) ** 2)
+        overall_r_squared = 1 - (ss_res / ss_tot)
+        logger.info(f"Overall R-squared across all folds: {overall_r_squared:.3f}")
+        print("val_indices", val_indices)
+        # Return best-predicted Y values for the best fold
+        return val_best_predicted_Y, val_indices
+
+
+    def get_predicted_Y(self, X: torch.Tensor, Z: torch.Tensor) -> torch.Tensor:
+        predicted_Y = self.model(X, Z).detach()
+        print("predicted_Y", predicted_Y)
         return predicted_Y
 
 
@@ -227,9 +401,6 @@ class DataSimulation:
         self.model.eta = self.eta
         self.model.zeta = self.zeta
         self.model.gamma = self.gamma
-        # simulated_Y, _, _, _, _ = self.model.forward(
-        #     self.X_t, self.Z_t, is_simulation=True
-        # )
         simulated_Y = self.model.forward(
             self.X_t, self.Z_t, is_simulation=True
         )

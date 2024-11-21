@@ -78,11 +78,6 @@ class DynamicLinearModel(nn.Module):
             )
 
         return predicted_Y
-            # G_hat.data.cpu().numpy(),
-            # eta_hat.data.cpu().numpy(),
-            # zeta_hat.data.cpu().numpy(),
-            # gamma_hat.data.cpu().numpy(),
-        
 
     
     def save_model(self, model_path: str) -> None:
