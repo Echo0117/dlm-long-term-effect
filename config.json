@@ -2,7 +2,7 @@
   "dataset": {
     "path": "/Users/pr059704/Downloads/features_df_germany_hist.csv",
     "brand": "absolut",
-    "brand_list": ["absolut", "chivas_regal", "jameson", "ramazzotti_aperitivo_rosato", "ramazzotti_crema_italiana"],
+    "brand_list": ["absolut", "chivas_regal", "jameson", "ramazzotti", "ramazzotti_aperitivo_rosato"],
     "dependent_variable": "volume_so",
     "independent_variables_X": ["january", "february", "march", "april", "may", "june", "july", "august", "september", 
     "october", "november", "december", "is_one_week_before_last", "is_last_week_of_the_year", "is_christmas","is_easter"],
@@ -23,7 +23,7 @@
   },
   "inferenceMethod": "torch_autograd", 
   "modelTraining": {
-    "epoch": 5,
+    "epoch": 5000,
     "learningRate": 0.00197583,
     "momentum": 0.635068,
     "weightDecay": 1e-4,
