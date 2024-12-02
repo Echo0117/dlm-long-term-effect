@@ -107,13 +107,14 @@ class SimulationRecovery:
             max_grad_norm = config["modelTraining"].get("maxGradNorm", 1.0)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
 
-            # Compute batch losses and aggregate
-            batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
-            aggregated_loss = batch_losses.sum() 
-            
-            # Backward pass
-            aggregated_loss.backward()
             optimizer.step()
+
+            params_after_optim = {
+                name: param.clone().detach().cpu()
+                for name, param in self.model.named_parameters()
+            }
+
+            all_parameters_list.append(params_after_optim)  
 
             # Validation phase
             if X_val is not None and Y_val is not None:
@@ -136,18 +137,6 @@ class SimulationRecovery:
                     logger.info(f"Early stopping at epoch {epoch}")
                     break
 
-            params_after_optim = self.model.named_parameters()
-
-            all_parameters_list.append(params_after_optim)
-
-            # Iterate over the parameter name and tensor pairs
-            for name, param in params_after_optim:
-                # Convert the parameter tensor to a list and save it in the dictionary
-                print(name, param)
-                all_parameters_dict[name] = param.data.cpu().numpy().tolist()
-
-            
-
             losses_list.append(batch_losses.detach().clone())
             outputs_list.append(outputs.detach().clone())
             val_outputs_list.append(val_outputs.detach().clone())
@@ -166,11 +155,6 @@ class SimulationRecovery:
             # Step the learning rate scheduler
             if val_loss is not None:
                 scheduler.step(val_loss)
-
-        # for name, param in self.model.named_parameters():
-        #     logger.info(f"Params {name}: {param.data}")
-
-        
 
         losses_tensor = torch.stack(losses_list)  # Shape: (epoch, num_runs, T)
         outputs_tensor = torch.stack(outputs_list)  # Shape: (epoch, num_runs, T)
@@ -207,21 +191,12 @@ class SimulationRecovery:
 
         # Convert the generator to a list of dictionaries
         param_list = list(all_parameters_list)
-        # print("param_list", param_list)
 
         # Convert the list of dictionaries to a DataFrame
-        df = pd.DataFrame(all_parameters_dict)
+        df = pd.DataFrame(param_list)
         df.columns = ["G", "eta", "zeta", "gamma"]
         df.to_csv(config["modelTraining"]["parametersPath"], index=False)
 
-        df1 = pd.DataFrame(param_list)
-        # ipdb.set_trace()
-        print(df1)
-        # df1.columns = ["G", "eta", "zeta", "gamma"]
-        print(f"""config["modelTraining"]["parametersPath"].replace(".csv","")+"list.csv""")
-        df1.to_csv(config["modelTraining"]["parametersPath"].replace(".csv","")+"list.csv", index=False)
-
-        
         return (
             self.model.named_parameters(),
             best_epoch,
@@ -390,14 +365,12 @@ class SimulationRecovery:
         ss_tot = np.sum((all_y_trues - np.mean(all_y_trues)) ** 2)
         overall_r_squared = 1 - (ss_res / ss_tot)
         logger.info(f"Overall R-squared across all folds: {overall_r_squared:.3f}")
-        print("val_indices", val_indices)
         # Return best-predicted Y values for the best fold
         return val_best_predicted_Y, val_indices
 
 
     def get_predicted_Y(self, X: torch.Tensor, Z: torch.Tensor) -> torch.Tensor:
         predicted_Y = self.model(X, Z).detach()
-        print("predicted_Y", predicted_Y)
         return predicted_Y
 
 
