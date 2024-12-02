@@ -94,15 +94,13 @@ class SimulationRecovery:
             for loss in batch_losses:
                 loss.backward(retain_graph=True)
             optimizer.step()
-            params_after_optim = self.model.named_parameters()
 
-            # Compute batch losses and aggregate
-            batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
-            aggregated_loss = batch_losses.sum() 
-            
-            # Backward pass
-            aggregated_loss.backward()
-            optimizer.step()
+            params_after_optim = {
+                name: param.clone().detach().cpu()
+                for name, param in self.model.named_parameters()
+            }
+
+            all_parameters_list.append(params_after_optim)            
 
             # Validation phase
             if X_val is not None and Y_val is not None:
@@ -125,7 +123,7 @@ class SimulationRecovery:
                     logger.info(f"Early stopping at epoch {epoch}")
                     break
 
-            all_parameters_list.append(params_after_optim)
+            
             losses_list.append(batch_losses.detach().clone())
             outputs_list.append(outputs.detach().clone())
             val_outputs_list.append(val_outputs.detach().clone())
@@ -140,8 +138,6 @@ class SimulationRecovery:
                     logger.info(
                         f"Epoch {epoch}: Training Loss = {batch_losses.mean().item():.6f}"
                     )
-        # for name, param in self.model.named_parameters():
-        #     logger.info(f"Params {name}: {param.data}")
 
         # ipdb.set_trace()
 
@@ -185,7 +181,7 @@ class SimulationRecovery:
         df = pd.DataFrame(param_list)
         df.columns = ["G", "eta", "zeta", "gamma"]
         df.to_csv(config["modelTraining"]["parametersPath"], index=False)
-
+        # ipdb.set_trace()
         return (
             self.model.named_parameters(),
             best_epoch,
