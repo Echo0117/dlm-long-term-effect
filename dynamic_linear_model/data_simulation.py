@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from loguru import logger
 from matplotlib.axes import Axes
 from sklearn.linear_model import LinearRegression
@@ -75,7 +76,11 @@ class SimulationRecovery:
             outputs_list,
             losses_list,
             all_parameters_list,
-        ) = ([], [], [])
+            all_parameters_dict,
+        ) = ([], [], [], {})
+
+        # Learning rate scheduler
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, verbose=True)
 
         val_losses = []
         val_outputs_list = []
@@ -83,6 +88,10 @@ class SimulationRecovery:
         best_val_loss = np.inf
         best_epoch = 0
         val_loss = None
+
+        G_values = []
+        gamma_values = []
+        zeta_values = []
 
         for epoch in tqdm(range(self.epoch), desc="Epochs"):
 
@@ -93,8 +102,10 @@ class SimulationRecovery:
             # Backward each loss separately
             for loss in batch_losses:
                 loss.backward(retain_graph=True)
-            optimizer.step()
-            params_after_optim = self.model.named_parameters()
+
+            # Clip gradients to avoid exploding gradients
+            max_grad_norm = config["modelTraining"].get("maxGradNorm", 1.0)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
 
             # Compute batch losses and aggregate
             batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
@@ -125,7 +136,18 @@ class SimulationRecovery:
                     logger.info(f"Early stopping at epoch {epoch}")
                     break
 
+            params_after_optim = self.model.named_parameters()
+
             all_parameters_list.append(params_after_optim)
+
+            # Iterate over the parameter name and tensor pairs
+            for name, param in params_after_optim:
+                # Convert the parameter tensor to a list and save it in the dictionary
+                print(name, param)
+                all_parameters_dict[name] = param.data.cpu().numpy().tolist()
+
+            
+
             losses_list.append(batch_losses.detach().clone())
             outputs_list.append(outputs.detach().clone())
             val_outputs_list.append(val_outputs.detach().clone())
@@ -140,10 +162,15 @@ class SimulationRecovery:
                     logger.info(
                         f"Epoch {epoch}: Training Loss = {batch_losses.mean().item():.6f}"
                     )
+            
+            # Step the learning rate scheduler
+            if val_loss is not None:
+                scheduler.step(val_loss)
+
         # for name, param in self.model.named_parameters():
         #     logger.info(f"Params {name}: {param.data}")
 
-        # ipdb.set_trace()
+        
 
         losses_tensor = torch.stack(losses_list)  # Shape: (epoch, num_runs, T)
         outputs_tensor = torch.stack(outputs_list)  # Shape: (epoch, num_runs, T)
@@ -180,12 +207,21 @@ class SimulationRecovery:
 
         # Convert the generator to a list of dictionaries
         param_list = list(all_parameters_list)
+        # print("param_list", param_list)
 
         # Convert the list of dictionaries to a DataFrame
-        df = pd.DataFrame(param_list)
+        df = pd.DataFrame(all_parameters_dict)
         df.columns = ["G", "eta", "zeta", "gamma"]
         df.to_csv(config["modelTraining"]["parametersPath"], index=False)
 
+        df1 = pd.DataFrame(param_list)
+        # ipdb.set_trace()
+        print(df1)
+        # df1.columns = ["G", "eta", "zeta", "gamma"]
+        print(f"""config["modelTraining"]["parametersPath"].replace(".csv","")+"list.csv""")
+        df1.to_csv(config["modelTraining"]["parametersPath"].replace(".csv","")+"list.csv", index=False)
+
+        
         return (
             self.model.named_parameters(),
             best_epoch,

@@ -25,7 +25,7 @@ class DynamicLinearModel(nn.Module):
         #     torch.FloatTensor(num_runs).uniform_(-4, 4).to(device)
         # ) # State transition coefficients
         self.G = nn.Parameter(
-            torch.full((num_runs,), 4.595, device=device)) # sigmoid(2.1972) = 0.9; sigmoid(4.595) = 0.99
+            torch.full((num_runs,), 2.1972, device=device, requires_grad=True)) # sigmoid(2.1972) = 0.9; sigmoid(4.595) = 0.99; sigmoid(3.89) = 0.98; sigmoid(0.4055) = 0.6
         self.eta = nn.Parameter(
             torch.abs(torch.randn(num_runs, config["dataset"]["xDim"], device=device))
         )  # Coefficients for X_t

@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import logging
 from matplotlib import pyplot as plt
@@ -44,7 +45,9 @@ if __name__ == "__main__":
         config["dataset"]["brand"] = brand
 
         # Create unique folder names for each brand
-        folder_name = f"""dataset/generated_results/train_results/multiple_brands/epoch{config["modelTraining"]["epoch"]}_run{config["simulationRecovery"]["independentRun"]}_{config["dataset"]["brand"]}"""
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        # folder_name = f"""dataset/generated_results/train_results/multiple_brands/epoch{config["modelTraining"]["epoch"]}_run{config["simulationRecovery"]["independentRun"]}_{config["dataset"]["brand"]}"""
+        folder_name = f"""dataset/generated_results/train_results/multiple_brands/epoch{config["modelTraining"]["epoch"]}_run{config["simulationRecovery"]["independentRun"]}_{config["dataset"]["brand"]}_{timestamp}"""
         os.makedirs(folder_name, exist_ok=True)
 
         # Update paths in configuration
