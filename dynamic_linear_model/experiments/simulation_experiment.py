@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from loguru import logger
 
 from config import config
-from dynamic_linear_model.data_simulation import DataSimulation, SimulationRecovery
+from dynamic_linear_model.data_simulation import SimulationRecovery
 from dynamic_linear_model.utils import (
     Plotter,
     delete_existing_files,

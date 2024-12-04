@@ -25,7 +25,9 @@ class DynamicLinearModel(nn.Module):
         #     torch.FloatTensor(num_runs).uniform_(-4, 4).to(device)
         # ) # State transition coefficients
         self.G = nn.Parameter(
-            torch.full((num_runs,), 2.1972, device=device, requires_grad=True)) # sigmoid(2.1972) = 0.9; sigmoid(4.595) = 0.99; sigmoid(3.89) = 0.98; sigmoid(0.4055) = 0.6
+            torch.full((num_runs,), 4.595, device=device, requires_grad=False)) # sigmoid(2.1972) = 0.9; sigmoid(4.595) = 0.99; sigmoid(3.89) = 0.98; sigmoid(0.4055) = 0.6; 1.3863=0.8
+        self.G.requires_grad = False # we need to set up this, otherwise requires_grad will still be true
+        
         self.eta = nn.Parameter(
             torch.abs(torch.randn(num_runs, config["dataset"]["xDim"], device=device))
         )  # Coefficients for X_t
@@ -37,7 +39,9 @@ class DynamicLinearModel(nn.Module):
         )  # Coefficients for Z_t-1
         self.sigmoid = nn.Sigmoid()
 
+
     def forward(self, X_t: torch.Tensor, Z_t: torch.Tensor, is_simulation: bool = False) -> tuple:
+
         X_t = X_t.to(device)
         Z_t = Z_t.to(device)
 
@@ -92,10 +96,10 @@ class DynamicLinearModel(nn.Module):
         with open(model_path, "wb") as file:
             pickle.dump(model_data, file)
 
-    def _load_model(self, model_path: str) -> None:
-        with open(model_path, "rb") as file:
-            model_data = pickle.load(file)
-            self.G = nn.Parameter(torch.tensor(model_data["G"], device=device))
-            self.eta = nn.Parameter(torch.tensor(model_data["eta"], device=device))
-            self.zeta = nn.Parameter(torch.tensor(model_data["zeta"], device=device))
-            self.gamma = nn.Parameter(torch.tensor(model_data["gamma"], device=device))
+    # def _load_model(self, model_path: str) -> None:
+    #     with open(model_path, "rb") as file:
+    #         model_data = pickle.load(file)
+    #         self.G = nn.Parameter(torch.tensor(model_data["G"], device=device))
+    #         self.eta = nn.Parameter(torch.tensor(model_data["eta"], device=device))
+    #         self.zeta = nn.Parameter(torch.tensor(model_data["zeta"], device=device))
+    #         self.gamma = nn.Parameter(torch.tensor(model_data["gamma"], device=device))
