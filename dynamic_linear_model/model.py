@@ -25,7 +25,7 @@ class DynamicLinearModel(nn.Module):
         #     torch.FloatTensor(num_runs).uniform_(-4, 4).to(device)
         # ) # State transition coefficients
         self.G = nn.Parameter(
-            torch.full((num_runs,), 4.595, device=device, requires_grad=False)) # sigmoid(2.1972) = 0.9; sigmoid(4.595) = 0.99; sigmoid(3.89) = 0.98; sigmoid(0.4055) = 0.6; 1.3863=0.8
+            torch.full((num_runs,), 0.0, device=device, requires_grad=False)) # sigmoid(2.1972) = 0.9; sigmoid(4.595) = 0.99; sigmoid(3.89) = 0.98; sigmoid(0.4055) = 0.6; 1.3863=0.8
         self.G.requires_grad = False # we need to set up this, otherwise requires_grad will still be true
         
         self.eta = nn.Parameter(
@@ -78,7 +78,7 @@ class DynamicLinearModel(nn.Module):
 
         for t in range(T):
             if t > 0:
-                theta = G_hat * theta + torch.sum(Z_t_repeated[:, t - 1] * gamma_hat, dim=1)
+                theta = G_hat * theta + torch.sum(Z_t_repeated[:, t] * gamma_hat, dim=1)
             predicted_Y[:, t] = (
                 theta + torch.sum(X_t_repeated[:, t] * eta_hat, dim=1) + torch.sum(Z_t_repeated[:, t] * zeta_hat, dim=1)
             )

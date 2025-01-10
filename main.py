@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 import logging
 from matplotlib import pyplot as plt
+import pandas as pd
 from config import config 
 from dynamic_linear_model.data_processing import DataPreprocessing
 from dynamic_linear_model.experiments.simulation_experiment import (
@@ -68,8 +69,22 @@ if __name__ == "__main__":
         # Preprocess the data
         X_t, Z_t, Y_t = data_preprocessing.preprocess(normalization=True)
 
-        # Run the simulation recovery on each subplot
         gamma_best, zeta_best, labels = trainer(X_t, Z_t, Y_t, plot_result=True, ax=axs[i])
+        
+        gamma_np = np.array(gamma_best)
+        zeta_np = np.array(zeta_best)
+
+        # Convert to DataFrame directly
+        df_gamma = pd.DataFrame(gamma_np, columns=["gamma_run"+str(i) for i in range(gamma_np.shape[1])]) \
+            if gamma_np.ndim > 1 else pd.DataFrame({"gamma": gamma_np})
+
+        df_zeta = pd.DataFrame(zeta_np, columns=["zeta_dim"+str(i) for i in range(zeta_np.shape[1])]) \
+            if zeta_np.ndim > 1 else pd.DataFrame({"zeta": zeta_np})
+
+        df_combined = pd.concat([df_gamma, df_zeta], axis=1)
+        corr_matrix_dims = df_combined.corr()
+
+        print("corr_matrix_dims", corr_matrix_dims)
 
         # Accumulate gamma and zeta values across brands for combined plot
         all_gamma_best.extend(gamma_best)

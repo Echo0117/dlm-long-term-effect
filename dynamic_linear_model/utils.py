@@ -146,7 +146,6 @@ def calculate_statistics(
 
     # Save to CSV
     saved_file_path = config["simulationRecovery"]["paramsSavedPath"]
-    print("saved_file_path", saved_file_path)
     new_df.to_csv(saved_file_path, index=False)
 
     logger.info(f"Simulation results saved to {saved_file_path}")

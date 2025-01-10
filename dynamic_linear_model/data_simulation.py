@@ -73,6 +73,29 @@ class SimulationRecovery:
             lr=config["modelTraining"]["learningRate"],
             weight_decay=config["modelTraining"]["weightDecay"],
         )
+
+        # # Suppose you want to update gamma more slowly and without L2 regularization
+        # gamma_lr = 1e-3
+        # gamma_weight_decay =  1e-1
+
+        # # Update zeta with a standard learning rate and some L2 regularization
+        # zeta_lr = 1e-3
+        # zeta_weight_decay = 0.0
+
+        # # Other parameters use default settings
+        # default_lr = 1e-3
+        # default_weight_decay = 1e-5
+
+        # other_params = [param for name, param in self.model.named_parameters()
+        #         if name not in ['gamma', 'zeta'] and param.requires_grad]
+
+        # # Initialize the optimizer with parameter groups
+        # optimizer = optim.Adam([
+        #     {'params': self.model.gamma, 'lr': gamma_lr, 'weight_decay': gamma_weight_decay},
+        #     {'params': self.model.zeta, 'lr': gamma_lr, 'weight_decay': zeta_weight_decay},
+        #     {'params': other_params, 'lr': gamma_lr, 'weight_decay': default_weight_decay}
+        # ])
+
         (
             outputs_list,
             losses_list,
@@ -81,7 +104,7 @@ class SimulationRecovery:
         ) = ([], [], [], {})
 
         # Learning rate scheduler
-        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, verbose=True)
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=config["modelTraining"]["factor"], patience=config["modelTraining"]["patience"], verbose=True)
 
         val_losses = []
         val_outputs_list = []
@@ -89,20 +112,34 @@ class SimulationRecovery:
         best_val_loss = np.inf
         best_epoch = 0
         val_loss = None
-
+        gamma_l2_lambda = config["modelTraining"]["l2Lambda"]
         for epoch in tqdm(range(self.epoch), desc="Epochs"):
 
             optimizer.zero_grad()
             outputs = self.model.forward(X_t, Z_t)
+            # method 1 L2 penalty on gamma
+            # batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1)) + self.model.gamma.pow(2).mean() * config["modelTraining"].get("l2Lambda", 1e-4)
+            
+            # method 2 L2 penalty on gamma
             batch_losses = mse_loss(outputs, Y_t.repeat(self.num_runs, 1))
+            gamma_l2_penalty = self.model.gamma.pow(2).mean() * gamma_l2_lambda
 
             # Backward each loss separately
             for loss in batch_losses:
-                loss.backward(retain_graph=True)
+                loss_penalty = loss + gamma_l2_penalty
+                loss_penalty.backward(retain_graph=True)
+
+            # TODO:
+            # 2-5% after converge
+            # Lower the lr, train longer
+            # the converge of the paramaters, 
 
             # Clip gradients to avoid exploding gradients
-            max_grad_norm = config["modelTraining"].get("maxGradNorm", 1.0)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
+            # max_grad_norm = config["modelTraining"]["maxGradNorm"]
+            # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
+
+            max_grad_value = config["modelTraining"].get("maxGradValue", 0.5) 
+            torch.nn.utils.clip_grad_value_(self.model.parameters(), max_grad_value)
 
             optimizer.step()
 
@@ -142,7 +179,7 @@ class SimulationRecovery:
             if epoch % 100 == 0 or epoch == epoch - 1:
                 if val_loss is not None:
                     logger.info(
-                        f"Epoch {epoch}: Training Loss = {batch_losses.mean().item():.6f}, Validation Loss = {val_loss:.6f}"
+                        f"Epoch {epoch}: Training Loss = {batch_losses.mean().item():.6f}, gamma_l2_penalty = {gamma_l2_penalty:.6f}, Validation Loss = {val_loss:.6f}"
                     )
                 else:
                     logger.info(
@@ -150,8 +187,13 @@ class SimulationRecovery:
                     )
             
             # Step the learning rate scheduler
-            if val_loss is not None:
-                scheduler.step(val_loss)
+            #TODO: apply scheduler on Training loss 
+            # if val_loss is not None:
+            #     scheduler.step(val_loss)
+
+            mean_train_loss = batch_losses.mean().item()
+            if mean_train_loss is not None:
+                scheduler.step(mean_train_loss)
 
         losses_tensor = torch.stack(losses_list)  # Shape: (epoch, num_runs, T)
         outputs_tensor = torch.stack(outputs_list)  # Shape: (epoch, num_runs, T)
